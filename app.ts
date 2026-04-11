@@ -73,8 +73,8 @@ const _app: App = {
   fileInput: document.getElementById('file-input') as HTMLInputElement
 };
 
-function getStrokeWidth(context: Context): number {
-  return 3 * context.state.zoom;
+function getStrokeWidth(zoom: number): number {
+  return 3 * zoom;
 }
 
 class HistoryManager {
@@ -195,13 +195,12 @@ function hexToRgba(hex: string, alpha: number = 1): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function resizeCanvas(context: Context): void {
-  const { state, app } = context;
-  const { canvas, ctx } = app;
+function resizeCanvas(app: App): void {
+  const { canvas } = app;
   const container = app.document.getElementById('canvas-container') as HTMLElement;
   canvas.width = container.offsetWidth;
   canvas.height = container.offsetHeight;
-  render(context);
+  render();
 }
 
 const TEXT_PADDING = 20;
@@ -224,23 +223,19 @@ function autoResizeNode(node: CanvasNode, context: Context): void {
   node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + TEXT_PADDING);
 }
 
-function undo(context: Context): void {
-  const { state } = context;
+function undo(state: State): void {
   if (state.historyManager.undo(state)) {
-    render(context);
+    render();
   }
 }
 
-function redo(context: Context): void {
-  const { state } = context;
+function redo(state: State): void {
   if (state.historyManager.redo(state)) {
-    render(context);
+    render();
   }
 }
 
-function screenToWorld(point: Point, context: Context): Point {
-  const { state, app } = context;
-  const { canvas } = app;
+function screenToWorld(point: Point, state: State, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -249,9 +244,7 @@ function screenToWorld(point: Point, context: Context): Point {
   };
 }
 
-function worldToScreen(point: Point, context: Context): Point {
-  const { state, app } = context;
-  const { canvas } = app;
+function worldToScreen(point: Point, state: State, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -260,8 +253,7 @@ function worldToScreen(point: Point, context: Context): Point {
   };
 }
 
-function drawGrid(context: Context): void {
-  const { state, app } = context;
+function drawGrid(app: App, state: State): void {
   const { ctx, canvas } = app;
   const gridSize = 32 * state.zoom;
   const offsetX = state.offset.x % gridSize;
@@ -280,7 +272,7 @@ function drawGrid(context: Context): void {
   }
   ctx.stroke();
 
-  const origin = worldToScreen({ x: 0, y: 0 }, context);
+  const origin = worldToScreen({ x: 0, y: 0 }, state, canvas);
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -294,7 +286,7 @@ function drawGrid(context: Context): void {
 function drawNode(node: CanvasNode, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
-  const pos = worldToScreen({ x: node.x, y: node.y }, context);
+  const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -326,7 +318,7 @@ function drawNode(node: CanvasNode, context: Context): void {
     }
     if (isSelected) {
       ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = getStrokeWidth(context);
+      ctx.lineWidth = getStrokeWidth(state.zoom);
       ctx.beginPath();
       ctx.moveTo(pos.x + r, pos.y);
       ctx.lineTo(pos.x + w - r, pos.y);
@@ -341,7 +333,7 @@ function drawNode(node: CanvasNode, context: Context): void {
       ctx.stroke();
     } else if (!strokeTransparent) {
       ctx.strokeStyle = strokeHex;
-      ctx.lineWidth = getStrokeWidth(context);
+      ctx.lineWidth = getStrokeWidth(state.zoom);
       ctx.beginPath();
       ctx.moveTo(pos.x + r, pos.y);
       ctx.lineTo(pos.x + w - r, pos.y);
@@ -408,7 +400,7 @@ function drawNode(node: CanvasNode, context: Context): void {
     }
     if (!strokeTransparent) {
       ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-      ctx.lineWidth = getStrokeWidth(context);
+      ctx.lineWidth = getStrokeWidth(state.zoom);
       ctx.beginPath();
       ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
       ctx.stroke();
@@ -432,11 +424,11 @@ function drawEdge(edge: Edge, context: Context): void {
     y: toNode.y + toNode.height / 2
   };
 
-  const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
-  const toEdgePoint = getRectEdgePoint(toNode, fromNode);
+   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
+   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context);
-  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context);
+   const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, context.app.canvas);
+   const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, context.app.canvas);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -448,7 +440,7 @@ function drawEdge(edge: Edge, context: Context): void {
   }
 
   ctx.strokeStyle = state.selectedEdge?.id === edge.id ? '#ffff00' : '#ffffff';
-  ctx.lineWidth = getStrokeWidth(context);
+  ctx.lineWidth = getStrokeWidth(state.zoom);
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
@@ -456,7 +448,7 @@ function drawEdge(edge: Edge, context: Context): void {
 
   function drawArrow(from: Point, to: Point): void {
     const arrowAngle = Math.atan2(to.y - from.y, to.x - from.x);
-    const arrowLen = getStrokeWidth(context) * 4;
+    const arrowLen = getStrokeWidth(state.zoom) * 4;
     ctx.beginPath();
     ctx.moveTo(to.x, to.y);
     ctx.lineTo(to.x - arrowLen * Math.cos(arrowAngle - Math.PI / 6), to.y - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
@@ -523,20 +515,22 @@ function getRectEdgePoint(node: CanvasNode, toNode: CanvasNode): Point {
   };
 }
 
-function render(context: Context): void {
+function renderFull(context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawGrid(context);
+   drawGrid(context.app, context.state);
 
   state.nodes.forEach(node => drawNode(node, context));
   state.edges.forEach(edge => drawEdge(edge, context));
 }
 
+const render = () => renderFull(context);
+
 function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const { state } = context;
-  const world = screenToWorld(point, context);
+   const world = screenToWorld(point, context.state, context.app.canvas);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
@@ -556,8 +550,8 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context);
-    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context);
+     const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
+     const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
 
     const dist = pointToLineDistance(point.x, point.y, from.x, from.y, to.x, to.y);
     if (dist < threshold) {
@@ -590,8 +584,7 @@ function pointToLineDistance(px: number, py: number, x1: number, y1: number, x2:
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function addTextNode(context: Context, x?: number, y?: number): void {
-  const { state } = context;
+function addTextNode(state: State, x?: number, y?: number): void {
   const id = 'node-' + Date.now();
   const node: CanvasNode = {
     id,
@@ -612,13 +605,12 @@ function addTextNode(context: Context, x?: number, y?: number): void {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel(context);
+  updatePropertiesPanel(state, _app);
   state.historyManager.save(state);
-  render(context);
+  render();
 }
 
-function addCircleNode(context: Context): void {
-  const { state } = context;
+function addCircleNode(state: State): void {
   const id = 'node-' + Date.now();
   const node: CanvasNode = {
     id,
@@ -636,24 +628,23 @@ function addCircleNode(context: Context): void {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel(context);
+  updatePropertiesPanel(state, _app);
   state.historyManager.save(state);
-  render(context);
+  render();
 }
 
-function deleteSelected(context: Context): void {
-  const { state } = context;
+function deleteSelected(state: State): void {
   if (state.selectedNode) {
     state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode!.id && e.toNode !== state.selectedNode!.id);
     state.nodes = state.nodes.filter(n => n.id !== state.selectedNode!.id);
     state.selectedNode = null;
     state.historyManager.save(state);
-    render(context);
+    render();
   } else if (state.selectedEdge) {
     state.edges = state.edges.filter(e => e.id !== state.selectedEdge!.id);
     state.selectedEdge = null;
     state.historyManager.save(state);
-    render(context);
+    render();
   } else if (state.selectedNodes.length > 0) {
     state.selectedNodes.forEach(node => {
       state.edges = state.edges.filter(e => e.fromNode !== node.id && e.toNode !== node.id);
@@ -661,12 +652,11 @@ function deleteSelected(context: Context): void {
     state.nodes = state.nodes.filter(n => !state.selectedNodes.includes(n));
     state.selectedNodes = [];
     state.historyManager.save(state);
-    render(context);
+    render();
   }
 }
 
-function addEdgeNode(context: Context): void {
-  const { state } = context;
+function addEdgeNode(state: State): void {
   if (state.selectedNodes.length >= 2) {
     const edge: Edge = {
       id: 'edge-' + Date.now(),
@@ -680,7 +670,7 @@ function addEdgeNode(context: Context): void {
     state.edges.push(edge);
     state.selectedNodes = [];
     state.historyManager.save(state);
-    render(context);
+    render();
   } else {
     alert('SHIFT押しながら2つのノードを選択してください');
   }
@@ -768,7 +758,7 @@ function loadFromFile(file: File, context: Context): void {
         state.offset.y = -data.viewport.y * state.zoom;
       }
       state.historyManager.save(state);
-      render(context);
+      render();
     } catch (err) {
       alert('ファイルの形式が正しくありません');
     }
@@ -796,15 +786,14 @@ function loadFromLocalStorage(state: State): void {
   }
 }
 
-function bringToFront(context: Context): void {
-  const { state } = context;
+function bringToFront(state: State): void {
   if (state.selectedNode) {
     const idx = state.nodes.indexOf(state.selectedNode);
     if (idx > -1) {
       state.nodes.splice(idx, 1);
       state.nodes.push(state.selectedNode);
       state.historyManager.save(state);
-      render(context);
+      render();
     }
   } else if (state.selectedNodes.length > 0) {
     state.selectedNodes.forEach(node => {
@@ -815,26 +804,25 @@ function bringToFront(context: Context): void {
     });
     state.nodes.push(...state.selectedNodes);
     state.historyManager.save(state);
-    render(context);
+    render();
   }
 }
 
-function sendToBack(context: Context): void {
-  const { state } = context;
+function sendToBack(state: State): void {
   if (state.selectedNode) {
     const idx = state.nodes.indexOf(state.selectedNode);
     if (idx > -1) {
       state.nodes.splice(idx, 1);
       state.nodes.unshift(state.selectedNode);
       state.historyManager.save(state);
-      render(context);
+      render();
     }
   } else if (state.selectedNodes.length > 0) {
     const selectedIds = state.selectedNodes.map(n => n.id);
     state.nodes = state.nodes.filter(n => !selectedIds.includes(n.id));
     state.nodes.unshift(...state.selectedNodes);
     state.historyManager.save(state);
-    render(context);
+    render();
   }
 }
 
@@ -842,8 +830,8 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
   const { state, app } = context;
   const { document } = app;
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    if (e.shiftKey) redo(context);
-    else undo(context);
+    if (e.shiftKey) redo(state);
+    else undo(state);
   }
   if (e.key === 'Tab') {
     e.preventDefault();
@@ -851,7 +839,7 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
       const fromNode = state.selectedNode;
       const newX = fromNode.x + fromNode.width + 20;
       const newY = fromNode.y;
-      addTextNode(context, newX, newY);
+      addTextNode(state, newX, newY);
       const toNode = state.selectedNode;
       if (fromNode && toNode && fromNode.id !== toNode.id) {
         const edge: Edge = {
@@ -865,7 +853,7 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
         };
         state.edges.push(edge);
         state.historyManager.save(state);
-        render(context);
+        render();
       }
     }
   }
@@ -874,7 +862,7 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
       return;
     }
-    deleteSelected(context);
+    deleteSelected(state);
   }
 }
 
@@ -883,7 +871,7 @@ function handleWheel(e: WheelEvent, context: Context): void {
   e.preventDefault();
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
   state.zoom = Math.max(0.1, Math.min(5, state.zoom * delta));
-  render(context);
+  render();
 }
 
 function handleMouseDown(e: MouseEvent, context: Context): void {
@@ -892,10 +880,10 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const node = findNodeAt({ x, y }, context);
+   const node = findNodeAt({ x, y }, context);
 
-  if (node) {
-    const world = screenToWorld({ x, y }, context);
+   if (node) {
+     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
     const resizeHandleSize = 10;
     const inResizeZone =
       world.x >= node.x + node.width - resizeHandleSize &&
@@ -922,8 +910,8 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
         state.selectedNode = node;
       }
       state.selectedEdge = null;
-      state.isDragging = true;
-      state.dragStart = screenToWorld({ x, y }, context);
+       state.isDragging = true;
+       state.dragStart = screenToWorld({ x, y }, context.state, context.app.canvas);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
@@ -943,8 +931,8 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
       state.dragStart = { x: e.clientX, y: e.clientY };
     }
   }
-  updatePropertiesPanel(context);
-  render(context);
+  updatePropertiesPanel(state, app);
+  render();
 }
 
 function handleMouseMove(e: MouseEvent, context: Context): void {
@@ -954,30 +942,30 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  if (state.isResizing && state.resizeNode) {
-    const world = screenToWorld({ x, y }, context);
-    const dx = world.x - state.resizeStart!.x;
+   if (state.isResizing && state.resizeNode) {
+     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+     const dx = world.x - state.resizeStart!.x;
     const dy = world.y - state.resizeStart!.y;
     const newWidth = Math.max(40, state.resizeStartSize!.width + dx);
     const newHeight = Math.max(30, state.resizeStartSize!.height + dy);
     state.resizeNode.width = newWidth;
     state.resizeNode.height = newHeight;
-    render(context);
+    render();
     return;
   }
 
   if (!state.isDragging) return;
 
-  if (state.selectedNode) {
-    const world = screenToWorld({ x, y }, context);
-    state.selectedNode.x = world.x - state.dragOffset.x;
-    state.selectedNode.y = world.y - state.dragOffset.y;
-    render(context);
+   if (state.selectedNode) {
+     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+     state.selectedNode.x = world.x - state.dragOffset.x;
+     state.selectedNode.y = world.y - state.dragOffset.y;
+    render();
   } else {
     state.offset.x += e.clientX - state.dragStart.x;
     state.offset.y += e.clientY - state.dragStart.y;
     state.dragStart = { x: e.clientX, y: e.clientY };
-    render(context);
+    render();
   }
 }
 
@@ -994,8 +982,7 @@ function handleMouseUp(context: Context): void {
   state.resizeNode = null;
 }
 
-function updatePropertiesPanel(context: Context): void {
-  const { state, app } = context;
+function updatePropertiesPanel(state: State, app: App): void {
   const { document } = app;
   const nodeProps = document.getElementById('node-props') as HTMLElement;
   const edgeProps = document.getElementById('edge-props') as HTMLElement;
@@ -1045,7 +1032,7 @@ function updatePaletteDisplay(containerId: string, context: Context): void {
     swatch.addEventListener('click', () => {
       if (state.selectedNode) {
         (state.selectedNode as any)[propName] = idx;
-        render(context);
+        render();
         updatePaletteDisplay('bg-palette', context);
         updatePaletteDisplay('stroke-palette', context);
         state.historyManager.save(state);
@@ -1069,21 +1056,13 @@ function initApp(context: Context): void {
   canvas.addEventListener('mouseup', () => handleMouseUp(context));
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
-  app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(context));
-  app.document.getElementById('btn-add-circle')!.addEventListener('click', () => addCircleNode(context));
-  app.document.getElementById('btn-add-edge')!.addEventListener('click', () => addEdgeNode(context));
-  app.document.getElementById('btn-undo')!.addEventListener('click', () => undo(context));
-  app.document.getElementById('btn-redo')!.addEventListener('click', () => redo(context));
-  app.document.getElementById('btn-zoom-in')!.addEventListener('click', () => {
-    context.state.zoom = Math.min(5, context.state.zoom * 1.2);
-    render(context);
-  });
-  app.document.getElementById('btn-zoom-out')!.addEventListener('click', () => {
-    context.state.zoom = Math.max(0.1, context.state.zoom / 1.2);
-    render(context);
-  });
-  app.document.getElementById('btn-front')!.addEventListener('click', () => bringToFront(context));
-  app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(context));
+  app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(_state));
+  app.document.getElementById('btn-add-circle')!.addEventListener('click', () => addCircleNode(_state));
+  app.document.getElementById('btn-add-edge')!.addEventListener('click', () => addEdgeNode(_state));
+  app.document.getElementById('btn-undo')!.addEventListener('click', () => undo(_state));
+  app.document.getElementById('btn-redo')!.addEventListener('click', () => redo(_state));
+  app.document.getElementById('btn-front')!.addEventListener('click', () => bringToFront(_state));
+  app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(_state));
   app.document.getElementById('btn-save')!.addEventListener('click', () => saveToFile(context));
   app.document.getElementById('btn-load')!.addEventListener('click', () => fileInput.click());
   app.document.getElementById('btn-log')!.addEventListener('click', () => {
@@ -1097,12 +1076,12 @@ function initApp(context: Context): void {
 
   app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));
 
-  window.addEventListener('resize', () => resizeCanvas(context));
+  window.addEventListener('resize', () => resizeCanvas(_app));
 
   app.document.getElementById('prop-arrow-start')!.addEventListener('change', (e) => {
     if (context.state.selectedEdge) {
       context.state.selectedEdge.arrowStart = (e.target as HTMLInputElement).checked;
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1110,7 +1089,7 @@ function initApp(context: Context): void {
   app.document.getElementById('prop-arrow-end')!.addEventListener('change', (e) => {
     if (context.state.selectedEdge) {
       context.state.selectedEdge.arrowEnd = (e.target as HTMLInputElement).checked;
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1118,7 +1097,7 @@ function initApp(context: Context): void {
   app.document.getElementById('prop-bg-transparent')!.addEventListener('change', (e) => {
     if (context.state.selectedNode) {
       context.state.selectedNode.bgTransparent = (e.target as HTMLInputElement).checked;
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1126,7 +1105,7 @@ function initApp(context: Context): void {
   app.document.getElementById('prop-stroke-transparent')!.addEventListener('change', (e) => {
     if (context.state.selectedNode) {
       context.state.selectedNode.strokeTransparent = (e.target as HTMLInputElement).checked;
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1137,7 +1116,7 @@ function initApp(context: Context): void {
       if ((e.target as HTMLInputElement).checked && context.state.selectedNode.text) {
         autoResizeNode(context.state.selectedNode, context);
       }
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1148,7 +1127,7 @@ function initApp(context: Context): void {
       if (context.state.selectedNode.autoResize !== false) {
         autoResizeNode(context.state.selectedNode, context);
       }
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1156,7 +1135,7 @@ function initApp(context: Context): void {
   app.document.getElementById('prop-text-halign')!.addEventListener('change', (e) => {
     if (context.state.selectedNode) {
       context.state.selectedNode.textAlign = (e.target as HTMLSelectElement).value as 'left' | 'center' | 'right';
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1164,7 +1143,7 @@ function initApp(context: Context): void {
   app.document.getElementById('prop-text-valign')!.addEventListener('change', (e) => {
     if (context.state.selectedNode) {
       context.state.selectedNode.textValign = (e.target as HTMLSelectElement).value as 'top' | 'center' | 'bottom';
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
@@ -1177,16 +1156,16 @@ function initApp(context: Context): void {
         updatePaletteDisplay('bg-palette', context);
         updatePaletteDisplay('stroke-palette', context);
       }
-      render(context);
+      render();
       context.state.historyManager.save(context.state);
     }
   });
 
-  resizeCanvas(context);
+  resizeCanvas(_app);
   loadFromLocalStorage(context.state);
   context.state.historyManager.save(context.state);
-  render(context);
-  updatePropertiesPanel(context);
+  render();
+  updatePropertiesPanel(_state, app);
 
   const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
   if (isDev) {

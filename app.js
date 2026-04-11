@@ -6,6 +6,65 @@ function getStrokeWidth(state) {
   return 3 * state.zoom;
 }
 
+class HistoryManager {
+  constructor(maxSize = 50) {
+    this.history = [];
+    this.historyIndex = -1;
+    this.maxSize = maxSize;
+  }
+
+  save(state) {
+    this.history = this.history.slice(0, this.historyIndex + 1);
+    this.history.push(JSON.stringify({
+      nodes: state.nodes,
+      edges: state.edges,
+      colorPalettes: state.colorPalettes,
+      strokePalettes: state.strokePalettes
+    }));
+    this.historyIndex++;
+    if (this.history.length > this.maxSize) {
+      this.history.shift();
+      this.historyIndex--;
+    }
+  }
+
+  undo(state) {
+    if (this.historyIndex > 0) {
+      this.historyIndex--;
+      this.restore(state);
+      return true;
+    }
+    return false;
+  }
+
+  redo(state) {
+    if (this.historyIndex < this.history.length - 1) {
+      this.historyIndex++;
+      this.restore(state);
+      return true;
+    }
+    return false;
+  }
+
+  restore(state) {
+    const data = JSON.parse(this.history[this.historyIndex]);
+    state.nodes = data.nodes;
+    state.edges = data.edges;
+    if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
+    if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
+    state.selectedNode = null;
+    state.selectedEdge = null;
+  }
+
+  canUndo() {
+    return this.historyIndex > 0;
+  }
+
+  canRedo() {
+    return this.historyIndex < this.history.length - 1;
+  }
+}
+
 const state = {
   nodes: [],
   edges: [],
@@ -17,8 +76,7 @@ const state = {
   offset: { x: 0, y: 0 },
   isDragging: false,
   dragStart: { x: 0, y: 0 },
-  history: [],
-  historyIndex: -1,
+  historyManager: new HistoryManager(50),
   colorPalettes: [
     '#000000', '#888888', '#ffffff',
     '#ff0000', '#00ff00', '#0000ff',
@@ -76,17 +134,6 @@ function autoResizeNode(node, state) {
   node.height = newHeight;
 }
 
-function saveToHistory(state) {
-  state.history = state.history.slice(0, state.historyIndex + 1);
-  state.history.push(JSON.stringify({ nodes: state.nodes, edges: state.edges, colorPalettes: state.colorPalettes, strokePalettes: state.strokePalettes }));
-  state.historyIndex++;
-  if (state.history.length > 50) {
-    state.history.shift();
-    state.historyIndex--;
-  }
-  autoSaveToLocalStorage(state);
-}
-
 function autoSaveToLocalStorage(state) {
   const data = JSON.stringify({
     nodes: state.nodes,
@@ -95,32 +142,17 @@ function autoSaveToLocalStorage(state) {
     strokePalettes: state.strokePalettes
   });
   localStorage.setItem('8bitcanvas-autosave', data);
+  state.historyManager.save(state);
 }
 
 function undo(state) {
-  if (state.historyIndex > 0) {
-    state.historyIndex--;
-    const data = JSON.parse(state.history[state.historyIndex]);
-    state.nodes = data.nodes;
-    state.edges = data.edges;
-    if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-    if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
-    state.selectedNode = null;
-    state.selectedEdge = null;
+  if (state.historyManager.undo(state)) {
     render(state, ctx, canvas);
   }
 }
 
 function redo(state) {
-  if (state.historyIndex < state.history.length - 1) {
-    state.historyIndex++;
-    const data = JSON.parse(state.history[state.historyIndex]);
-    state.nodes = data.nodes;
-    state.edges = data.edges;
-    if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-    if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
-    state.selectedNode = null;
-    state.selectedEdge = null;
+  if (state.historyManager.redo(state)) {
     render(state, ctx, canvas);
   }
 }
@@ -477,7 +509,7 @@ function addTextNode(state) {
   state.selectedNode = node;
   state.mode = 'select';
   updatePropertiesPanel(state);
-  saveToHistory(state);
+  state.historyManager.save(state);
   render(state, ctx, canvas);
 }
 
@@ -499,7 +531,7 @@ function addCircleNode(state) {
   state.selectedNode = node;
   state.mode = 'select';
   updatePropertiesPanel(state);
-  saveToHistory(state);
+  state.historyManager.save(state);
   render(state, ctx, canvas);
 }
 
@@ -508,12 +540,12 @@ function deleteSelected(state) {
     state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode.id && e.toNode !== state.selectedNode.id);
     state.nodes = state.nodes.filter(n => n.id !== state.selectedNode.id);
     state.selectedNode = null;
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   } else if (state.selectedEdge) {
     state.edges = state.edges.filter(e => e.id !== state.selectedEdge.id);
     state.selectedEdge = null;
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   } else if (state.selectedNodes.length > 0) {
     state.selectedNodes.forEach(node => {
@@ -521,7 +553,7 @@ function deleteSelected(state) {
     });
     state.nodes = state.nodes.filter(n => !state.selectedNodes.includes(n));
     state.selectedNodes = [];
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   }
 }
@@ -540,7 +572,7 @@ function addEdgeNode(state) {
     };
     state.edges.push(edge);
     state.selectedNodes = [];
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   } else {
     alert('SHIFT押しながら2つのノードを選択してください');
@@ -626,7 +658,7 @@ function loadFromFile(file, state) {
         state.offset.x = -data.viewport.x * state.zoom;
         state.offset.y = -data.viewport.y * state.zoom;
       }
-      saveToHistory(state);
+      state.historyManager.save(state);
       render(state, ctx, canvas);
     } catch (err) {
       alert('ファイルの形式が正しくありません');
@@ -650,7 +682,7 @@ function loadFromLocalStorage(state) {
       if (parsed.edges) state.edges = parsed.edges;
       if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
       if (parsed.strokePalettes) state.strokePalettes = parsed.strokePalettes;
-      saveToHistory(state);
+      state.historyManager.save(state);
     } catch (e) {}
   }
 }
@@ -661,7 +693,7 @@ function bringToFront(state) {
     if (idx > -1) {
       state.nodes.splice(idx, 1);
       state.nodes.push(state.selectedNode);
-      saveToHistory(state);
+      state.historyManager.save(state);
       render(state, ctx, canvas);
     }
   } else if (state.selectedNodes.length > 0) {
@@ -672,7 +704,7 @@ function bringToFront(state) {
       }
     });
     state.nodes.push(...state.selectedNodes);
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   }
 }
@@ -683,14 +715,14 @@ function sendToBack(state) {
     if (idx > -1) {
       state.nodes.splice(idx, 1);
       state.nodes.unshift(state.selectedNode);
-      saveToHistory(state);
+      state.historyManager.save(state);
       render(state, ctx, canvas);
     }
   } else if (state.selectedNodes.length > 0) {
     const selectedIds = state.selectedNodes.map(n => n.id);
     state.nodes = state.nodes.filter(n => !selectedIds.includes(n.id));
     state.nodes.unshift(...state.selectedNodes);
-    saveToHistory(state);
+    state.historyManager.save(state);
     render(state, ctx, canvas);
   }
 }
@@ -809,10 +841,10 @@ function handleMouseMove(e, state) {
 
 function handleMouseUp(state) {
   if (state.isDragging && state.selectedNode) {
-    saveToHistory(state);
+    state.historyManager.save(state);
   }
   if (state.isResizing) {
-    saveToHistory(state);
+    state.historyManager.save(state);
   }
   state.isDragging = false;
   state.isResizing = false;
@@ -869,7 +901,7 @@ function updatePaletteDisplay(containerId, selectedIdx, propName, state) {
         render(state, ctx, canvas);
         updatePaletteDisplay('bg-palette', state.selectedNode.bgPaletteIndex, 'bgPaletteIndex', state);
         updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex', state);
-        saveToHistory(state);
+        state.historyManager.save(state);
       }
     });
     swatch.addEventListener('dblclick', () => {
@@ -920,7 +952,7 @@ function initApp(state) {
     if (state.selectedEdge) {
       state.selectedEdge.arrowStart = e.target.checked;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -928,7 +960,7 @@ function initApp(state) {
     if (state.selectedEdge) {
       state.selectedEdge.arrowEnd = e.target.checked;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -936,7 +968,7 @@ function initApp(state) {
     if (state.selectedNode) {
       state.selectedNode.bgTransparent = e.target.checked;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -944,7 +976,7 @@ function initApp(state) {
     if (state.selectedNode) {
       state.selectedNode.strokeTransparent = e.target.checked;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -955,7 +987,7 @@ function initApp(state) {
         autoResizeNode(state.selectedNode, state);
       }
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -966,7 +998,7 @@ function initApp(state) {
         autoResizeNode(state.selectedNode, state);
       }
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -974,7 +1006,7 @@ function initApp(state) {
     if (state.selectedNode) {
       state.selectedNode.textAlign = e.target.value;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -982,7 +1014,7 @@ function initApp(state) {
     if (state.selectedNode) {
       state.selectedNode.textValign = e.target.value;
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
@@ -995,13 +1027,13 @@ function initApp(state) {
         updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex', state);
       }
       render(state, ctx, canvas);
-      saveToHistory(state);
+      state.historyManager.save(state);
     }
   });
 
   resizeCanvas(state);
   loadFromLocalStorage(state);
-  saveToHistory(state);
+  state.historyManager.save(state);
   render(state, ctx, canvas);
   updatePropertiesPanel(state);
 

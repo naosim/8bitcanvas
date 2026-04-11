@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8bit Canvas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <div id="toolbar">
+        <button id="btn-add-text" class="pixel-btn">テキスト</button>
+        <button id="btn-add-rect" class="pixel-btn">矩形</button>
+        <button id="btn-add-circle" class="pixel-btn">円</button>
+        <button id="btn-add-edge" class="pixel-btn">エッジ</button>
+        <button id="btn-undo" class="pixel-btn">Undo</button>
+        <button id="btn-redo" class="pixel-btn">Redo</button>
+        <button id="btn-zoom-in" class="pixel-btn">+</button>
+        <button id="btn-zoom-out" class="pixel-btn">-</button>
+        <button id="btn-save" class="pixel-btn">保存</button>
+        <button id="btn-load" class="pixel-btn">読込</button>
+        <button id="btn-log" class="pixel-btn">Log</button>
+        <button id="btn-clear-storage" class="pixel-btn" style="display: none;">CLR</button>
+      </div>
+      <div id="properties">
+        <div id="node-props" class="prop-panel" style="display: none;">
+          <div class="prop-row">
+            <label>テキスト：</label>
+            <textarea id="prop-text" class="pixel-input"></textarea>
+          </div>
+          <div class="prop-row">
+            <label>横位置：</label>
+            <select id="prop-text-halign" class="pixel-select">
+              <option value="left">左</option>
+              <option value="center">中央</option>
+              <option value="right">右</option>
+            </select>
+          </div>
+          <div class="prop-row">
+            <label>縦位置：</label>
+            <select id="prop-text-valign" class="pixel-select">
+              <option value="top">上</option>
+              <option value="middle">中央</option>
+              <option value="bottom">下</option>
+            </select>
+          </div>
+          <div class="prop-row">
+            <label>
+              <input type="checkbox" id="prop-auto-resize" checked> 自動サイズ
+            </label>
+          </div>
+          <div class="prop-row">
+            <label>背景：</label>
+            <span class="transparent-option"><input type="checkbox" id="prop-bg-transparent"> 透明</span>
+            <div id="bg-palette" class="palette-row"></div>
+          </div>
+          <div class="prop-row">
+            <label>線：</label>
+            <span class="transparent-option"><input type="checkbox" id="prop-stroke-transparent"> 透明</span>
+            <div id="stroke-palette" class="palette-row"></div>
+          </div>
+          <div id="palette-edit" class="prop-row" style="display: none;">
+            <label>パレット編集：</label>
+            <input type="color" id="palette-color-picker">
+          </div>
+          <button id="btn-front" class="pixel-btn">前面</button>
+          <button id="btn-back" class="pixel-btn">背面</button>
+        </div>
+        <div id="edge-props" class="prop-panel" style="display: none;">
+          <div class="prop-row">
+            <label>
+              <input type="checkbox" id="prop-arrow-start"> 始点矢印
+            </label>
+          </div>
+          <div class="prop-row">
+            <label>
+              <input type="checkbox" id="prop-arrow-end"> 終点矢印
+            </label>
+          </div>
+          <button id="btn-front" class="pixel-btn">前面</button>
+          <button id="btn-back" class="pixel-btn">背面</button>
+        </div>
+      </div>
+    </div>
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+    <input type="file" id="file-input" accept=".json" style="display: none;">
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

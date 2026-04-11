@@ -1,22 +1,92 @@
-const _app = {
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface CanvasNode {
+  id: string;
+  type: 'text' | 'circle';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  textValign?: 'top' | 'center' | 'bottom';
+  bgPaletteIndex: number;
+  bgTransparent: boolean;
+  strokePaletteIndex: number;
+  strokeTransparent: boolean;
+  autoResize: boolean;
+}
+
+interface Edge {
+  id: string;
+  fromNode: string;
+  toNode: string;
+  fromSide: string;
+  toSide: string;
+  arrowStart: boolean;
+  arrowEnd: boolean;
+}
+
+interface State {
+  nodes: CanvasNode[];
+  edges: Edge[];
+  selectedNode: CanvasNode | null;
+  selectedNodes: CanvasNode[];
+  selectedEdge: Edge | null;
+  mode: string;
+  zoom: number;
+  offset: Point;
+  isDragging: boolean;
+  isResizing: boolean;
+  dragStart: Point;
+  resizeNode: CanvasNode | null;
+  resizeStart: Point | null;
+  resizeStartSize: { width: number; height: number } | null;
+  dragOffset: Point;
+  historyManager: HistoryManager;
+  colorPalettes: string[];
+  strokePalettes: string[];
+  selectedPaletteIndex: number;
+  editingPaletteIndex: number | undefined;
+  editingPaletteType: string | undefined;
+}
+
+interface App {
+  document: Document;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  fileInput: HTMLInputElement;
+}
+
+interface Context {
+  state: State;
+  app: App;
+}
+
+const _app: App = {
   document: document,
-  canvas: document.getElementById('canvas'),
-  ctx: document.getElementById('canvas').getContext('2d'),
-  fileInput: document.getElementById('file-input')
+  canvas: document.getElementById('canvas') as HTMLCanvasElement,
+  ctx: (document.getElementById('canvas') as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D,
+  fileInput: document.getElementById('file-input') as HTMLInputElement
 };
 
-function getStrokeWidth(context) {
+function getStrokeWidth(context: Context): number {
   return 3 * context.state.zoom;
 }
 
 class HistoryManager {
-  constructor(maxSize = 50) {
-    this.history = [];
-    this.historyIndex = -1;
+  private history: string[] = [];
+  private historyIndex: number = -1;
+  private maxSize: number;
+
+  constructor(maxSize: number = 50) {
     this.maxSize = maxSize;
   }
 
-  save(state) {
+  save(state: State): void {
     this.history = this.history.slice(0, this.historyIndex + 1);
     this.history.push(JSON.stringify({
       nodes: state.nodes,
@@ -38,7 +108,7 @@ class HistoryManager {
     localStorage.setItem('8bitcanvas-autosave', data);
   }
 
-  undo(state) {
+  undo(state: State): boolean {
     if (this.historyIndex > 0) {
       this.historyIndex--;
       this.restore(state);
@@ -47,7 +117,7 @@ class HistoryManager {
     return false;
   }
 
-  redo(state) {
+  redo(state: State): boolean {
     if (this.historyIndex < this.history.length - 1) {
       this.historyIndex++;
       this.restore(state);
@@ -56,7 +126,7 @@ class HistoryManager {
     return false;
   }
 
-  restore(state) {
+  private restore(state: State): void {
     const data = JSON.parse(this.history[this.historyIndex]);
     state.nodes = data.nodes;
     state.edges = data.edges;
@@ -66,16 +136,16 @@ class HistoryManager {
     state.selectedEdge = null;
   }
 
-  canUndo() {
+  canUndo(): boolean {
     return this.historyIndex > 0;
   }
 
-  canRedo() {
+  canRedo(): boolean {
     return this.historyIndex < this.history.length - 1;
   }
 }
 
-const _state = {
+const _state: State = {
   nodes: [],
   edges: [],
   selectedNode: null,
@@ -85,7 +155,12 @@ const _state = {
   zoom: 1,
   offset: { x: 0, y: 0 },
   isDragging: false,
+  isResizing: false,
   dragStart: { x: 0, y: 0 },
+  resizeNode: null,
+  resizeStart: null,
+  resizeStartSize: null,
+  dragOffset: { x: 0, y: 0 },
   historyManager: new HistoryManager(50),
   colorPalettes: [
     '#000000', '#888888', '#ffffff',
@@ -102,11 +177,9 @@ const _state = {
   editingPaletteType: undefined
 };
 
-const _context = { state:_state, app:_app };
+const context: Context = { state: _state, app: _app };
 
-const OBSIDIAN_CANVAS_VERSION = '1.0.0';
-
-function rgbaToHex(rgba) {
+function rgbaToHex(rgba: string): string {
   const match = rgba.match(/rgba?\((\d+),(\d+),(\d+),?([\d.]+)?\)/);
   if (!match) return '#000000';
   const r = parseInt(match[1]).toString(16).padStart(2, '0');
@@ -115,38 +188,27 @@ function rgbaToHex(rgba) {
   return '#' + r + g + b;
 }
 
-function hexToRgba(hex, alpha = 1) {
+function hexToRgba(hex: string, alpha: number = 1): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function resizeCanvas(context) {
+function resizeCanvas(context: Context): void {
   const { state, app } = context;
   const { canvas, ctx } = app;
-  const container = app.document.getElementById('canvas-container');
+  const container = app.document.getElementById('canvas-container') as HTMLElement;
   canvas.width = container.offsetWidth;
   canvas.height = container.offsetHeight;
   render(context);
 }
 
-function undo(context) {
-  const { state } = context;
-  if (state.historyManager.undo(state)) {
-    render(context);
-  }
-}
+const TEXT_PADDING = 20;
+const LINE_HEIGHT = 18;
 
-function redo(context) {
-  const { state } = context;
-  if (state.historyManager.redo(state)) {
-    render(context);
-  }
-}
-
-function autoResizeNode(node, context) {
-  const { state, app } = context;
+function autoResizeNode(node: CanvasNode, context: Context): void {
+  const { app } = context;
   const { ctx } = app;
   if (!node.text) return;
   const lines = node.text.split('\n');
@@ -158,64 +220,47 @@ function autoResizeNode(node, context) {
     const metrics = ctx.measureText(line);
     if (metrics.width > maxWidth) maxWidth = metrics.width;
   });
-  const newWidth = Math.max(minWidth, maxWidth + 20);
-  const newHeight = Math.max(minHeight, lines.length * 18 + 20);
-  node.width = newWidth;
-  node.height = newHeight;
+  node.width = Math.max(minWidth, maxWidth + TEXT_PADDING);
+  node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + TEXT_PADDING);
 }
 
-function autoSaveToLocalStorage(state) {
-  const data = JSON.stringify({
-    nodes: state.nodes,
-    edges: state.edges,
-    colorPalettes: state.colorPalettes,
-    strokePalettes: state.strokePalettes
-  });
-  localStorage.setItem('8bitcanvas-autosave', data);
-  state.historyManager.save(state);
-}
-
-function undo(state, app) {
-  const { ctx, canvas } = app;
+function undo(context: Context): void {
+  const { state } = context;
   if (state.historyManager.undo(state)) {
     render(context);
   }
 }
 
-function redo(state, app) {
-  const { ctx, canvas } = app;
+function redo(context: Context): void {
+  const { state } = context;
   if (state.historyManager.redo(state)) {
     render(context);
   }
 }
 
-function screenToWorld(point, context) {
-  const x = point.x;
-  const y = point.y;
+function screenToWorld(point: Point, context: Context): Point {
   const { state, app } = context;
   const { canvas } = app;
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
-    x: (x - centerX - state.offset.x) / state.zoom,
-    y: (y - centerY - state.offset.y) / state.zoom
+    x: (point.x - centerX - state.offset.x) / state.zoom,
+    y: (point.y - centerY - state.offset.y) / state.zoom
   };
 }
 
-function worldToScreen(point, context) {
-  const x = point.x;
-  const y = point.y;
+function worldToScreen(point: Point, context: Context): Point {
   const { state, app } = context;
   const { canvas } = app;
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
-    x: x * state.zoom + state.offset.x + centerX,
-    y: y * state.zoom + state.offset.y + centerY
+    x: point.x * state.zoom + state.offset.x + centerX,
+    y: point.y * state.zoom + state.offset.y + centerY
   };
 }
 
-function drawGrid(context) {
+function drawGrid(context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
   const gridSize = 32 * state.zoom;
@@ -235,7 +280,7 @@ function drawGrid(context) {
   }
   ctx.stroke();
 
-  const origin = worldToScreen({x: 0, y: 0}, context);
+  const origin = worldToScreen({ x: 0, y: 0 }, context);
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -246,10 +291,10 @@ function drawGrid(context) {
   ctx.stroke();
 }
 
-function drawNode(node, context) {
+function drawNode(node: CanvasNode, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
-  const pos = worldToScreen({x: node.x, y: node.y}, context);
+  const pos = worldToScreen({ x: node.x, y: node.y }, context);
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -310,7 +355,7 @@ function drawNode(node, context) {
       ctx.closePath();
       ctx.stroke();
     }
-    
+
     if (node.text && state.zoom > 0.3) {
       const lines = node.text.split('\n');
       const lineHeight = 18 * state.zoom;
@@ -335,7 +380,7 @@ function drawNode(node, context) {
         } else if (align === 'right') {
           x = pos.x + w - 8;
         }
-        let y = startY + i * lineHeight;
+        const y = startY + i * lineHeight;
 
         if (align === 'center') {
           ctx.textAlign = 'center';
@@ -371,7 +416,7 @@ function drawNode(node, context) {
   }
 }
 
-function drawEdge(edge, context) {
+function drawEdge(edge: Edge, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
   const fromNode = state.nodes.find(n => n.id === edge.fromNode);
@@ -390,8 +435,8 @@ function drawEdge(edge, context) {
   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-  const from = worldToScreen({x: fromEdgePoint.x, y: fromEdgePoint.y}, context);
-  const to = worldToScreen({x: toEdgePoint.x, y: toEdgePoint.y}, context);
+  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context);
+  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -409,7 +454,7 @@ function drawEdge(edge, context) {
   ctx.lineTo(to.x, to.y);
   ctx.stroke();
 
-  function drawArrow(from, to) {
+  function drawArrow(from: Point, to: Point): void {
     const arrowAngle = Math.atan2(to.y - from.y, to.x - from.x);
     const arrowLen = getStrokeWidth(context) * 4;
     ctx.beginPath();
@@ -428,16 +473,16 @@ function drawEdge(edge, context) {
   }
 }
 
-function getRectEdgePoint(node, toNode) {
-  const from = {
+function getRectEdgePoint(node: CanvasNode, toNode: CanvasNode): Point {
+  const from: Point = {
     x: node.x + node.width / 2,
     y: node.y + node.height / 2
   };
-  const to = {
+  const to: Point = {
     x: toNode.x + toNode.width / 2,
     y: toNode.y + toNode.height / 2
   };
-  
+
   if (node.type === 'circle') {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -448,18 +493,17 @@ function getRectEdgePoint(node, toNode) {
       y: from.y + Math.sin(angle) * radius
     };
   }
-  
+
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  
+
   if (dx === 0 && dy === 0) {
     return { x: from.x, y: from.y };
   }
-  
+
   const tMin = 0.0001;
-  let tMax = 1;
   let t = Infinity;
-  
+
   if (dx !== 0) {
     const t1 = (node.x - from.x) / dx;
     const t2 = (node.x + node.width - from.x) / dx;
@@ -472,14 +516,14 @@ function getRectEdgePoint(node, toNode) {
     if (t1 > tMin && t1 < 1) t = Math.min(t, t1);
     if (t2 > tMin && t2 < 1) t = Math.min(t, t2);
   }
-  
+
   return {
     x: from.x + dx * t,
     y: from.y + dy * t
   };
 }
 
-function render(context) {
+function render(context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
   ctx.fillStyle = '#1a1a1a';
@@ -490,11 +534,9 @@ function render(context) {
   state.edges.forEach(edge => drawEdge(edge, context));
 }
 
-function findNodeAt(point, context) {
-  const x = point.x;
-  const y = point.y;
+function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const { state } = context;
-  const world = screenToWorld({x, y}, context);
+  const world = screenToWorld(point, context);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
@@ -505,9 +547,7 @@ function findNodeAt(point, context) {
   return null;
 }
 
-function findEdgeAt(point, context) {
-  const x = point.x;
-  const y = point.y;
+function findEdgeAt(point: Point, context: Context): Edge | null {
   const { state } = context;
   const threshold = 10;
   for (let i = state.edges.length - 1; i >= 0; i--) {
@@ -516,10 +556,10 @@ function findEdgeAt(point, context) {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const from = worldToScreen({x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2}, context);
-    const to = worldToScreen({x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2}, context);
-    
-    const dist = pointToLineDistance(x, y, from.x, from.y, to.x, to.y);
+    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context);
+    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context);
+
+    const dist = pointToLineDistance(point.x, point.y, from.x, from.y, to.x, to.y);
     if (dist < threshold) {
       return edge;
     }
@@ -527,7 +567,7 @@ function findEdgeAt(point, context) {
   return null;
 }
 
-function pointToLineDistance(px, py, x1, y1, x2, y2) {
+function pointToLineDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const A = px - x1;
   const B = py - y1;
   const C = x2 - x1;
@@ -536,7 +576,7 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
   const lenSq = C * C + D * D;
   let param = -1;
   if (lenSq !== 0) param = dot / lenSq;
-  let xx, yy;
+  let xx: number, yy: number;
   if (param < 0) {
     xx = x1; yy = y1;
   } else if (param > 1) {
@@ -550,10 +590,10 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function addTextNode(context, x, y) {
+function addTextNode(context: Context, x?: number, y?: number): void {
   const { state } = context;
   const id = 'node-' + Date.now();
-  const node = {
+  const node: CanvasNode = {
     id,
     type: 'text',
     x: x !== undefined ? x : -50,
@@ -577,10 +617,10 @@ function addTextNode(context, x, y) {
   render(context);
 }
 
-function addCircleNode(context) {
+function addCircleNode(context: Context): void {
   const { state } = context;
   const id = 'node-' + Date.now();
-  const node = {
+  const node: CanvasNode = {
     id,
     type: 'circle',
     x: -50,
@@ -590,7 +630,8 @@ function addCircleNode(context) {
     bgPaletteIndex: 4,
     bgTransparent: false,
     strokePaletteIndex: 2,
-    strokeTransparent: false
+    strokeTransparent: false,
+    autoResize: true
   };
   state.nodes.push(node);
   state.selectedNode = node;
@@ -600,16 +641,16 @@ function addCircleNode(context) {
   render(context);
 }
 
-function deleteSelected(context) {
+function deleteSelected(context: Context): void {
   const { state } = context;
   if (state.selectedNode) {
-    state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode.id && e.toNode !== state.selectedNode.id);
-    state.nodes = state.nodes.filter(n => n.id !== state.selectedNode.id);
+    state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode!.id && e.toNode !== state.selectedNode!.id);
+    state.nodes = state.nodes.filter(n => n.id !== state.selectedNode!.id);
     state.selectedNode = null;
     state.historyManager.save(state);
     render(context);
   } else if (state.selectedEdge) {
-    state.edges = state.edges.filter(e => e.id !== state.selectedEdge.id);
+    state.edges = state.edges.filter(e => e.id !== state.selectedEdge!.id);
     state.selectedEdge = null;
     state.historyManager.save(state);
     render(context);
@@ -624,12 +665,11 @@ function deleteSelected(context) {
   }
 }
 
-function addEdgeNode(context) {
+function addEdgeNode(context: Context): void {
   const { state } = context;
   if (state.selectedNodes.length >= 2) {
-    const id = 'edge-' + Date.now();
-    const edge = {
-      id,
+    const edge: Edge = {
+      id: 'edge-' + Date.now(),
       fromNode: state.selectedNodes[0].id,
       toNode: state.selectedNodes[1].id,
       fromSide: 'bottom',
@@ -646,7 +686,7 @@ function addEdgeNode(context) {
   }
 }
 
-function exportToObsidianCanvas(state) {
+function exportToObsidianCanvas(state: State): string {
   const data = {
     nodes: state.nodes.map(n => ({
       id: n.id,
@@ -681,31 +721,29 @@ function exportToObsidianCanvas(state) {
   return JSON.stringify(data, null, 2);
 }
 
-function saveToFile(context) {
-  const { state, app } = context;
-  const { document } = app;
+function saveToFile(context: Context): void {
+  const { state } = context;
   const data = exportToObsidianCanvas(state);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = _app.document.createElement('a');
   a.href = url;
   a.download = 'canvas.json';
   a.click();
   URL.revokeObjectURL(url);
-
   localStorage.setItem('8bitcanvas-autosave', data);
 }
 
-function loadFromFile(file, context) {
+function loadFromFile(file: File, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const data = JSON.parse(e.target.result);
+      const data = JSON.parse(e.target!.result as string);
       if (data.nodes) {
-        state.nodes = data.nodes.map(n => {
-          const node = { ...n };
+        state.nodes = data.nodes.map((n: any) => {
+          const node: CanvasNode = { ...n };
           if (n.width <= 20 && n.height <= 20) {
             node.type = 'circle';
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
@@ -738,13 +776,13 @@ function loadFromFile(file, context) {
   reader.readAsText(file);
 }
 
-function findPaletteIndex(palettes, color) {
+function findPaletteIndex(palettes: string[], color: string | undefined): number {
   if (!color) return 0;
   const idx = palettes.indexOf(color);
   return idx >= 0 ? idx : 0;
 }
 
-function loadFromLocalStorage(state) {
+function loadFromLocalStorage(state: State): void {
   const data = localStorage.getItem('8bitcanvas-autosave');
   if (data) {
     try {
@@ -758,7 +796,7 @@ function loadFromLocalStorage(state) {
   }
 }
 
-function bringToFront(context) {
+function bringToFront(context: Context): void {
   const { state } = context;
   if (state.selectedNode) {
     const idx = state.nodes.indexOf(state.selectedNode);
@@ -781,7 +819,7 @@ function bringToFront(context) {
   }
 }
 
-function sendToBack(context) {
+function sendToBack(context: Context): void {
   const { state } = context;
   if (state.selectedNode) {
     const idx = state.nodes.indexOf(state.selectedNode);
@@ -800,7 +838,7 @@ function sendToBack(context) {
   }
 }
 
-function handleKeyDown(e, context) {
+function handleKeyDown(e: KeyboardEvent, context: Context): void {
   const { state, app } = context;
   const { document } = app;
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -816,7 +854,7 @@ function handleKeyDown(e, context) {
       addTextNode(context, newX, newY);
       const toNode = state.selectedNode;
       if (fromNode && toNode && fromNode.id !== toNode.id) {
-        const edge = {
+        const edge: Edge = {
           id: 'edge-' + Date.now(),
           fromNode: fromNode.id,
           toNode: toNode.id,
@@ -833,14 +871,14 @@ function handleKeyDown(e, context) {
   }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     const active = document.activeElement;
-    if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') {
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
       return;
     }
     deleteSelected(context);
   }
 }
 
-function handleWheel(e, context) {
+function handleWheel(e: WheelEvent, context: Context): void {
   const { state } = context;
   e.preventDefault();
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -848,21 +886,21 @@ function handleWheel(e, context) {
   render(context);
 }
 
-function handleMouseDown(e, context) {
+function handleMouseDown(e: MouseEvent, context: Context): void {
   const { state, app } = context;
   const { canvas } = app;
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const node = findNodeAt({x, y}, context);
+  const node = findNodeAt({ x, y }, context);
 
   if (node) {
-    const world = screenToWorld({x, y}, context);
+    const world = screenToWorld({ x, y }, context);
     const resizeHandleSize = 10;
-    const inResizeZone = 
+    const inResizeZone =
       world.x >= node.x + node.width - resizeHandleSize &&
       world.y >= node.y + node.height - resizeHandleSize;
-    
+
     if (inResizeZone && node.autoResize === false) {
       state.isResizing = true;
       state.resizeNode = node;
@@ -885,14 +923,14 @@ function handleMouseDown(e, context) {
       }
       state.selectedEdge = null;
       state.isDragging = true;
-      state.dragStart = screenToWorld({x, y}, context);
+      state.dragStart = screenToWorld({ x, y }, context);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
       };
     }
   } else {
-    const edge = findEdgeAt({x, y}, context);
+    const edge = findEdgeAt({ x, y }, context);
     if (edge) {
       state.selectedEdge = edge;
       state.selectedNode = null;
@@ -909,7 +947,7 @@ function handleMouseDown(e, context) {
   render(context);
 }
 
-function handleMouseMove(e, context) {
+function handleMouseMove(e: MouseEvent, context: Context): void {
   const { state, app } = context;
   const { canvas } = app;
   const rect = canvas.getBoundingClientRect();
@@ -917,11 +955,11 @@ function handleMouseMove(e, context) {
   const y = e.clientY - rect.top;
 
   if (state.isResizing && state.resizeNode) {
-    const world = screenToWorld({x, y}, context);
-    const dx = world.x - state.resizeStart.x;
-    const dy = world.y - state.resizeStart.y;
-    const newWidth = Math.max(40, state.resizeStartSize.width + dx);
-    const newHeight = Math.max(30, state.resizeStartSize.height + dy);
+    const world = screenToWorld({ x, y }, context);
+    const dx = world.x - state.resizeStart!.x;
+    const dy = world.y - state.resizeStart!.y;
+    const newWidth = Math.max(40, state.resizeStartSize!.width + dx);
+    const newHeight = Math.max(30, state.resizeStartSize!.height + dy);
     state.resizeNode.width = newWidth;
     state.resizeNode.height = newHeight;
     render(context);
@@ -931,7 +969,7 @@ function handleMouseMove(e, context) {
   if (!state.isDragging) return;
 
   if (state.selectedNode) {
-    const world = screenToWorld({x, y}, context);
+    const world = screenToWorld({ x, y }, context);
     state.selectedNode.x = world.x - state.dragOffset.x;
     state.selectedNode.y = world.y - state.dragOffset.y;
     render(context);
@@ -943,7 +981,7 @@ function handleMouseMove(e, context) {
   }
 }
 
-function handleMouseUp(context) {
+function handleMouseUp(context: Context): void {
   const { state } = context;
   if (state.isDragging && state.selectedNode) {
     state.historyManager.save(state);
@@ -956,41 +994,39 @@ function handleMouseUp(context) {
   state.resizeNode = null;
 }
 
-function updatePropertiesPanel(context) {
+function updatePropertiesPanel(context: Context): void {
   const { state, app } = context;
   const { document } = app;
-  const nodeProps = document.getElementById('node-props');
-  const edgeProps = document.getElementById('edge-props');
-  const bgTransparentOpt = document.querySelector('.transparent-option');
-  const strokeTransparentOpt = document.querySelectorAll('.transparent-option')[1];
-  
+  const nodeProps = document.getElementById('node-props') as HTMLElement;
+  const edgeProps = document.getElementById('edge-props') as HTMLElement;
+  const bgTransparentOpt = document.querySelector('.transparent-option') as HTMLElement;
+  const strokeTransparentOpt = document.querySelectorAll('.transparent-option')[1] as HTMLElement;
+
   updatePaletteDisplay('bg-palette', context);
   updatePaletteDisplay('stroke-palette', context);
-  
+
   if (state.selectedNode) {
     nodeProps.style.display = 'flex';
     edgeProps.style.display = 'none';
-    app.document.getElementById('prop-text').value = state.selectedNode.text || '';
-    app.document.getElementById('prop-text-halign').value = state.selectedNode.textAlign || 'left';
-    app.document.getElementById('prop-text-valign').value = state.selectedNode.textValign || 'top';
-    const bgIdx = state.selectedNode.bgPaletteIndex !== undefined ? state.selectedNode.bgPaletteIndex : 1;
-    const strokeIdx = state.selectedNode.strokePaletteIndex !== undefined ? state.selectedNode.strokePaletteIndex : 2;
-    app.document.getElementById('prop-bg-transparent').checked = state.selectedNode.bgTransparent || false;
-    app.document.getElementById('prop-stroke-transparent').checked = state.selectedNode.strokeTransparent || false;
-    app.document.getElementById('prop-auto-resize').checked = state.selectedNode.autoResize !== false;
-    
+    (document.getElementById('prop-text') as HTMLInputElement).value = state.selectedNode.text || '';
+    (document.getElementById('prop-text-halign') as HTMLSelectElement).value = state.selectedNode.textAlign || 'left';
+    (document.getElementById('prop-text-valign') as HTMLSelectElement).value = state.selectedNode.textValign || 'top';
+    (document.getElementById('prop-bg-transparent') as HTMLInputElement).checked = state.selectedNode.bgTransparent || false;
+    (document.getElementById('prop-stroke-transparent') as HTMLInputElement).checked = state.selectedNode.strokeTransparent || false;
+    (document.getElementById('prop-auto-resize') as HTMLInputElement).checked = state.selectedNode.autoResize !== false;
+
     const isText = state.selectedNode.type === 'text';
     bgTransparentOpt.style.display = isText ? 'inline' : 'none';
     strokeTransparentOpt.style.display = isText ? 'inline' : 'none';
   } else if (state.selectedEdge) {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'flex';
-    app.document.getElementById('prop-arrow-start').checked = state.selectedEdge.arrowStart || false;
-    app.document.getElementById('prop-arrow-end').checked = state.selectedEdge.arrowEnd || false;
+    (document.getElementById('prop-arrow-start') as HTMLInputElement).checked = state.selectedEdge.arrowStart || false;
+    (document.getElementById('prop-arrow-end') as HTMLInputElement).checked = state.selectedEdge.arrowEnd || false;
   }
 }
 
-function updatePaletteDisplay(containerId, context) {
+function updatePaletteDisplay(containerId: string, context: Context): void {
   const { state, app } = context;
   const { document } = app;
   const container = document.getElementById(containerId);
@@ -1008,7 +1044,7 @@ function updatePaletteDisplay(containerId, context) {
     }
     swatch.addEventListener('click', () => {
       if (state.selectedNode) {
-        state.selectedNode[propName] = idx;
+        (state.selectedNode as any)[propName] = idx;
         render(context);
         updatePaletteDisplay('bg-palette', context);
         updatePaletteDisplay('stroke-palette', context);
@@ -1018,148 +1054,150 @@ function updatePaletteDisplay(containerId, context) {
     swatch.addEventListener('dblclick', () => {
       state.editingPaletteIndex = idx;
       state.editingPaletteType = containerId;
-      app.document.getElementById('palette-color-picker').click();
+      (document.getElementById('palette-color-picker') as HTMLInputElement).click();
     });
     container.appendChild(swatch);
   });
 }
 
-function initApp(context) {
-  const { state, app } = context;
-  const { canvas, ctx, fileInput } = app;
+function initApp(context: Context): void {
+  const { app } = context;
+  const { canvas, fileInput } = app;
+
   canvas.addEventListener('mousedown', (e) => handleMouseDown(e, context));
   canvas.addEventListener('mousemove', (e) => handleMouseMove(e, context));
   canvas.addEventListener('mouseup', () => handleMouseUp(context));
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
-  app.document.getElementById('btn-add-text').addEventListener('click', () => addTextNode(context));
-  app.document.getElementById('btn-add-circle').addEventListener('click', () => addCircleNode(context));
-  app.document.getElementById('btn-add-edge').addEventListener('click', () => addEdgeNode(context));
-  app.document.getElementById('btn-undo').addEventListener('click', () => undo(context));
-  app.document.getElementById('btn-redo').addEventListener('click', () => redo(context));
-  app.document.getElementById('btn-zoom-in').addEventListener('click', () => {
-    state.zoom = Math.min(5, state.zoom * 1.2);
+  app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(context));
+  app.document.getElementById('btn-add-circle')!.addEventListener('click', () => addCircleNode(context));
+  app.document.getElementById('btn-add-edge')!.addEventListener('click', () => addEdgeNode(context));
+  app.document.getElementById('btn-undo')!.addEventListener('click', () => undo(context));
+  app.document.getElementById('btn-redo')!.addEventListener('click', () => redo(context));
+  app.document.getElementById('btn-zoom-in')!.addEventListener('click', () => {
+    context.state.zoom = Math.min(5, context.state.zoom * 1.2);
     render(context);
   });
-  app.document.getElementById('btn-zoom-out').addEventListener('click', () => {
-    state.zoom = Math.max(0.1, state.zoom / 1.2);
+  app.document.getElementById('btn-zoom-out')!.addEventListener('click', () => {
+    context.state.zoom = Math.max(0.1, context.state.zoom / 1.2);
     render(context);
   });
-  app.document.getElementById('btn-front').addEventListener('click', () => bringToFront(context));
-  app.document.getElementById('btn-back').addEventListener('click', () => sendToBack(context));
-  app.document.getElementById('btn-save').addEventListener('click', () => saveToFile(context));
-  app.document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
-  app.document.getElementById('btn-log').addEventListener('click', () => {
-    const data = exportToObsidianCanvas(state);
+  app.document.getElementById('btn-front')!.addEventListener('click', () => bringToFront(context));
+  app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(context));
+  app.document.getElementById('btn-save')!.addEventListener('click', () => saveToFile(context));
+  app.document.getElementById('btn-load')!.addEventListener('click', () => fileInput.click());
+  app.document.getElementById('btn-log')!.addEventListener('click', () => {
+    const data = exportToObsidianCanvas(context.state);
     console.log(data);
   });
   fileInput.addEventListener('change', (e) => {
-    if (e.target.files[0]) loadFromFile(e.target.files[0], context);
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) loadFromFile(target.files[0], context);
   });
 
   app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));
 
   window.addEventListener('resize', () => resizeCanvas(context));
 
-  app.document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
-    if (state.selectedEdge) {
-      state.selectedEdge.arrowStart = e.target.checked;
+  app.document.getElementById('prop-arrow-start')!.addEventListener('change', (e) => {
+    if (context.state.selectedEdge) {
+      context.state.selectedEdge.arrowStart = (e.target as HTMLInputElement).checked;
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
-    if (state.selectedEdge) {
-      state.selectedEdge.arrowEnd = e.target.checked;
+  app.document.getElementById('prop-arrow-end')!.addEventListener('change', (e) => {
+    if (context.state.selectedEdge) {
+      context.state.selectedEdge.arrowEnd = (e.target as HTMLInputElement).checked;
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-bg-transparent').addEventListener('change', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.bgTransparent = e.target.checked;
+  app.document.getElementById('prop-bg-transparent')!.addEventListener('change', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.bgTransparent = (e.target as HTMLInputElement).checked;
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-stroke-transparent').addEventListener('change', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.strokeTransparent = e.target.checked;
+  app.document.getElementById('prop-stroke-transparent')!.addEventListener('change', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.strokeTransparent = (e.target as HTMLInputElement).checked;
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-auto-resize').addEventListener('change', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.autoResize = e.target.checked;
-      if (e.target.checked && state.selectedNode.text) {
-        autoResizeNode(state.selectedNode, context);
+  app.document.getElementById('prop-auto-resize')!.addEventListener('change', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.autoResize = (e.target as HTMLInputElement).checked;
+      if ((e.target as HTMLInputElement).checked && context.state.selectedNode.text) {
+        autoResizeNode(context.state.selectedNode, context);
       }
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-text').addEventListener('input', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.text = e.target.value;
-      if (state.selectedNode.autoResize !== false) {
-        autoResizeNode(state.selectedNode, context);
+  app.document.getElementById('prop-text')!.addEventListener('input', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.text = (e.target as HTMLInputElement).value;
+      if (context.state.selectedNode.autoResize !== false) {
+        autoResizeNode(context.state.selectedNode, context);
       }
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-text-halign').addEventListener('change', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.textAlign = e.target.value;
+  app.document.getElementById('prop-text-halign')!.addEventListener('change', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.textAlign = (e.target as HTMLSelectElement).value as 'left' | 'center' | 'right';
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('prop-text-valign').addEventListener('change', (e) => {
-    if (state.selectedNode) {
-      state.selectedNode.textValign = e.target.value;
+  app.document.getElementById('prop-text-valign')!.addEventListener('change', (e) => {
+    if (context.state.selectedNode) {
+      context.state.selectedNode.textValign = (e.target as HTMLSelectElement).value as 'top' | 'center' | 'bottom';
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
-  app.document.getElementById('palette-color-picker').addEventListener('input', (e) => {
-    if (state.editingPaletteIndex !== undefined) {
-      const palettes = state.editingPaletteType === 'stroke-palette' ? state.strokePalettes : state.colorPalettes;
-      palettes[state.editingPaletteIndex] = hexToRgba(e.target.value);
-      if (state.selectedNode) {
+  app.document.getElementById('palette-color-picker')!.addEventListener('input', (e) => {
+    if (context.state.editingPaletteIndex !== undefined) {
+      const palettes = context.state.editingPaletteType === 'stroke-palette' ? context.state.strokePalettes : context.state.colorPalettes;
+      palettes[context.state.editingPaletteIndex] = hexToRgba((e.target as HTMLInputElement).value);
+      if (context.state.selectedNode) {
         updatePaletteDisplay('bg-palette', context);
         updatePaletteDisplay('stroke-palette', context);
       }
       render(context);
-      state.historyManager.save(state);
+      context.state.historyManager.save(context.state);
     }
   });
 
   resizeCanvas(context);
-  loadFromLocalStorage(state);
-  state.historyManager.save(state);
+  loadFromLocalStorage(context.state);
+  context.state.historyManager.save(context.state);
   render(context);
   updatePropertiesPanel(context);
 
   const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
   if (isDev) {
-    app.document.getElementById('btn-clear-storage').style.display = 'inline-block';
+    (app.document.getElementById('btn-clear-storage') as HTMLElement).style.display = 'inline-block';
   }
 
-  app.document.getElementById('btn-clear-storage').addEventListener('click', () => {
+  app.document.getElementById('btn-clear-storage')!.addEventListener('click', () => {
     localStorage.removeItem('8bitcanvas-autosave');
     localStorage.removeItem('8bitcanvas-dev');
     location.reload();
   });
 }
 
-initApp(_context);
+initApp(context);

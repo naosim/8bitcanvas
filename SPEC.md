@@ -7,7 +7,7 @@
   - undo/redo
   - ズーム
 - 技術
-  - vanilla HTML / CSS / JavaScript
+  - TypeScript / vanilla CSS / HTML
   - 保存先はローカルファイル(DL)、LocalStorage
 
 ## 設計
@@ -85,6 +85,11 @@ Obsidian Canvas形式
 
 ## コーディング規約
 
+### 技術スタック
+- TypeScript で実装
+- コンパイル: `npm run build` → `dist/app.js`
+- 厳格なタイプチェック (strict mode)
+
 ### 変数宣言
 - `const` を優先し、`let` は再代入が必要な場合のみ使用
 - グローバル変数の使用を避ける
@@ -118,45 +123,59 @@ Obsidian Canvas形式
 
 ### context 使用例
 
-```javascript
+```typescript
 // GOOD
-function handleMouseDown(e, context) {
+function handleMouseDown(e: MouseEvent, context: Context): void {
   const { state, app } = context;
   const { canvas } = app;
   // ...
 }
 
 // BAD: グローバル変数アクセス
-function render() {
+function render(): void {
   ctx.fillRect(0, 0, canvas.width, canvas.height); // NG!
 }
 ```
 
 ### グローバルオブジェクト構造
 
-```javascript
-const app = {
-  canvas: document.getElementById('canvas'),
-  ctx: document.getElementById('canvas').getContext('2d'),
-  fileInput: document.getElementById('file-input')
+```typescript
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface CanvasNode {
+  id: string;
+  type: 'text' | 'circle';
+  x: number;
+  y: number;
+  // ...
+}
+
+interface State {
+  nodes: CanvasNode[];
+  // ...
+}
+
+interface App {
+  document: Document;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  fileInput: HTMLInputElement;
+}
+
+const _app: App = {
+  document: document,
+  canvas: document.getElementById('canvas') as HTMLCanvasElement,
+  ctx: (document.getElementById('canvas') as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D,
+  fileInput: document.getElementById('file-input') as HTMLInputElement
 };
 
-const state = {
+const _state: State = {
   nodes: [],
-  edges: [],
-  selectedNode: null,
-  selectedNodes: [],
-  selectedEdge: null,
-  mode: 'select',
-  zoom: 1,
-  offset: { x: 0, y: 0 },
-  isDragging: false,
-  dragStart: { x: 0, y: 0 },
-  historyManager: new HistoryManager(50),
-  colorPalettes: [...],
-  strokePalettes: [...],
   // ...
 };
 
-const context = { state, app };
+const context: Context = { state: _state, app: _app };
 ```

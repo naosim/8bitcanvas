@@ -1,0 +1,12 @@
+{
+  "name": "8bitcanvas",
+  "version": "1.0.0",
+  "description": "Canvas-based node editor",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

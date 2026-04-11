@@ -409,22 +409,22 @@ function drawEdge(edge, context) {
   ctx.lineTo(to.x, to.y);
   ctx.stroke();
 
-  function drawArrow(fromX, fromY, toX, toY) {
-    const arrowAngle = Math.atan2(toY - fromY, toX - fromX);
+  function drawArrow(from, to) {
+    const arrowAngle = Math.atan2(to.y - from.y, to.x - from.x);
     const arrowLen = getStrokeWidth(context) * 4;
     ctx.beginPath();
-    ctx.moveTo(toX, toY);
-    ctx.lineTo(toX - arrowLen * Math.cos(arrowAngle - Math.PI / 6), toY - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
-    ctx.moveTo(toX, toY);
-    ctx.lineTo(toX - arrowLen * Math.cos(arrowAngle + Math.PI / 6), toY - arrowLen * Math.sin(arrowAngle + Math.PI / 6));
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - arrowLen * Math.cos(arrowAngle - Math.PI / 6), to.y - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - arrowLen * Math.cos(arrowAngle + Math.PI / 6), to.y - arrowLen * Math.sin(arrowAngle + Math.PI / 6));
     ctx.stroke();
   }
 
   if (edge.arrowStart) {
-    drawArrow(to.x, to.y, from.x, from.y);
+    drawArrow(to, from);
   }
   if (edge.arrowEnd) {
-    drawArrow(from.x, from.y, to.x, to.y);
+    drawArrow(from, to);
   }
 }
 

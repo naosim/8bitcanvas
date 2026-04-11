@@ -2,6 +2,10 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
 
+function getStrokeWidth() {
+  return 3 * state.zoom;
+}
+
 const state = {
   nodes: [],
   edges: [],
@@ -183,6 +187,10 @@ function drawNode(node) {
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
 
+  if (pos.x + w < 0 || pos.x > canvas.width || pos.y + h < 0 || pos.y > canvas.height) {
+    return;
+  }
+
   if (node.type === 'text') {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#4444aa';
     const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
@@ -194,15 +202,15 @@ function drawNode(node) {
     }
     if (isSelected) {
       ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = getStrokeWidth();
       ctx.strokeRect(pos.x, pos.y, w, h);
     } else if (!strokeTransparent) {
       ctx.strokeStyle = strokeHex;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = getStrokeWidth();
       ctx.strokeRect(pos.x, pos.y, w, h);
     }
     
-    if (node.text) {
+    if (node.text && state.zoom > 0.3) {
       const lines = node.text.split('\n');
       const lineHeight = 18 * state.zoom;
       const align = node.textAlign || 'left';
@@ -244,7 +252,7 @@ function drawNode(node) {
   } else if (node.type === 'rectangle') {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#4444aa';
     const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
-    const r = 8 * state.zoom;
+    const r = 4 * state.zoom;
     ctx.fillStyle = bgHex;
     ctx.beginPath();
     ctx.moveTo(pos.x + r, pos.y);
@@ -259,10 +267,10 @@ function drawNode(node) {
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = getStrokeWidth();
     ctx.stroke();
 
-    if (node.text) {
+    if (node.text && state.zoom > 0.3) {
       const lines = node.text.split('\n');
       const lineHeight = 18 * state.zoom;
       const align = node.textAlign || 'center';
@@ -314,7 +322,7 @@ function drawNode(node) {
     }
     if (!strokeTransparent) {
       ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = getStrokeWidth();
       ctx.beginPath();
       ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
       ctx.stroke();
@@ -342,8 +350,17 @@ function drawEdge(edge) {
   const from = worldToScreen(fromEdgePoint.x, fromEdgePoint.y);
   const to = worldToScreen(toEdgePoint.x, toEdgePoint.y);
 
+  const minX = Math.min(from.x, to.x);
+  const maxX = Math.max(from.x, to.x);
+  const minY = Math.min(from.y, to.y);
+  const maxY = Math.max(from.y, to.y);
+
+  if (maxX < 0 || minX > canvas.width || maxY < 0 || minY > canvas.height) {
+    return;
+  }
+
   ctx.strokeStyle = state.selectedEdge?.id === edge.id ? '#ffff00' : '#ffffff';
-  ctx.lineWidth = 2 * state.zoom;
+  ctx.lineWidth = getStrokeWidth();
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
@@ -351,7 +368,7 @@ function drawEdge(edge) {
 
   function drawArrow(fromX, fromY, toX, toY) {
     const arrowAngle = Math.atan2(toY - fromY, toX - fromX);
-    const arrowLen = 10 * state.zoom;
+    const arrowLen = getStrokeWidth() * 4;
     ctx.beginPath();
     ctx.moveTo(toX, toY);
     ctx.lineTo(toX - arrowLen * Math.cos(arrowAngle - Math.PI / 6), toY - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
@@ -931,6 +948,22 @@ function updatePropertiesPanel() {
     document.getElementById('prop-arrow-end').checked = state.selectedEdge.arrowEnd || false;
   }
 }
+
+document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
+  if (state.selectedEdge) {
+    state.selectedEdge.arrowStart = e.target.checked;
+    render();
+    saveToHistory();
+  }
+});
+
+document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
+  if (state.selectedEdge) {
+    state.selectedEdge.arrowEnd = e.target.checked;
+    render();
+    saveToHistory();
+  }
+});
 
 function updatePaletteDisplay(containerId, selectedIdx, propName) {
   const container = document.getElementById(containerId);

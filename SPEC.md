@@ -82,3 +82,81 @@ Obsidian Canvas形式
 
 #### UI
 - 選択項目の重なり順序変更（最前面/最背面）。エッジよりは後ろ
+
+## コーディング規約
+
+### 変数宣言
+- `const` を優先し、`let` は再代入が必要な場合のみ使用
+- グローバル変数の使用を避ける
+
+### 関数設計
+- **最大2パラメータ**: 関数は最大2つの引数を取る
+- **context オブジェクト使用**: より多くのデータが必要な場合、複数のパラメータの代わりに `context` オブジェクト `{ state, app }` を渡す
+- **point オブジェクト使用**: 座標を個別の x, y パラメータではなく `{ x, y }` オブジェクトにまとめる
+
+### グローバル状態管理
+- 状態は単一の `state` オブジェクトに格納
+- アプリ参照（canvas, ctx, fileInput）は `app` オブジェクトに格納
+- それらを `context` オブジェクトに統合: `const context = { state, app }`
+- 関数には `context` を渡し、グローバル参照を避ける
+
+### クラス設計
+- 状態を持つコンポーネントにはクラスを使用（例: `HistoryManager`）
+- 単一責任を維持
+
+### 命名規則
+- 関数: camelCase（例: `handleMouseDown`, `screenToWorld`）
+- クラス: PascalCase（例: `HistoryManager`）
+- 定数:  magic number は UPPER_SNAKE_CASE、 その他は camelCase
+- オブジェクト: camelCase（例: `state`, `app`, `context`）
+
+### コードスタイル
+- セミコロンを一貫して使用
+- 文字列には単一引用符
+- スペース2文字でインデント
+- 末尾の空白なし
+
+### context 使用例
+
+```javascript
+// GOOD
+function handleMouseDown(e, context) {
+  const { state, app } = context;
+  const { canvas } = app;
+  // ...
+}
+
+// BAD: グローバル変数アクセス
+function render() {
+  ctx.fillRect(0, 0, canvas.width, canvas.height); // NG!
+}
+```
+
+### グローバルオブジェクト構造
+
+```javascript
+const app = {
+  canvas: document.getElementById('canvas'),
+  ctx: document.getElementById('canvas').getContext('2d'),
+  fileInput: document.getElementById('file-input')
+};
+
+const state = {
+  nodes: [],
+  edges: [],
+  selectedNode: null,
+  selectedNodes: [],
+  selectedEdge: null,
+  mode: 'select',
+  zoom: 1,
+  offset: { x: 0, y: 0 },
+  isDragging: false,
+  dragStart: { x: 0, y: 0 },
+  historyManager: new HistoryManager(50),
+  colorPalettes: [...],
+  strokePalettes: [...],
+  // ...
+};
+
+const context = { state, app };
+```

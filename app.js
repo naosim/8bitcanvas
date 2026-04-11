@@ -1,4 +1,5 @@
-const app = {
+const _app = {
+  document: document,
   canvas: document.getElementById('canvas'),
   ctx: document.getElementById('canvas').getContext('2d'),
   fileInput: document.getElementById('file-input')
@@ -94,7 +95,7 @@ const state = {
   editingPaletteType: undefined
 };
 
-const context = { state, app };
+const context = { state, app:_app };
 
 const OBSIDIAN_CANVAS_VERSION = '1.0.0';
 
@@ -117,7 +118,7 @@ function hexToRgba(hex, alpha = 1) {
 function resizeCanvas(context) {
   const { state, app } = context;
   const { canvas, ctx } = app;
-  const container = document.getElementById('canvas-container');
+  const container = app.document.getElementById('canvas-container');
   canvas.width = container.offsetWidth;
   canvas.height = container.offsetHeight;
   render(context);
@@ -564,7 +565,7 @@ function addTextNode(context) {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel(state);
+  updatePropertiesPanel(context);
   state.historyManager.save(state);
   render(context);
 }
@@ -587,7 +588,7 @@ function addCircleNode(context) {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel(state);
+  updatePropertiesPanel(context);
   state.historyManager.save(state);
   render(context);
 }
@@ -673,7 +674,9 @@ function exportToObsidianCanvas(state) {
   return JSON.stringify(data, null, 2);
 }
 
-function saveToFile(state) {
+function saveToFile(context) {
+  const { state, app } = context;
+  const { document } = app;
   const data = exportToObsidianCanvas(state);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -797,7 +800,7 @@ function handleKeyDown(e, context) {
     else undo(context);
   }
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    const active = document.activeElement;
+    const active = app.document.activeElement;
     if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') {
       return;
     }
@@ -870,7 +873,7 @@ function handleMouseDown(e, context) {
       state.dragStart = { x: e.clientX, y: e.clientY };
     }
   }
-  updatePropertiesPanel(state);
+  updatePropertiesPanel(context);
   render(context);
 }
 
@@ -921,7 +924,9 @@ function handleMouseUp(context) {
   state.resizeNode = null;
 }
 
-function updatePropertiesPanel(state) {
+function updatePropertiesPanel(context) {
+  const { state, app } = context;
+  const { document } = app;
   const nodeProps = document.getElementById('node-props');
   const edgeProps = document.getElementById('edge-props');
   const bgTransparentOpt = document.querySelector('.transparent-option');
@@ -933,14 +938,14 @@ function updatePropertiesPanel(state) {
   if (state.selectedNode) {
     nodeProps.style.display = 'flex';
     edgeProps.style.display = 'none';
-    document.getElementById('prop-text').value = state.selectedNode.text || '';
-    document.getElementById('prop-text-halign').value = state.selectedNode.textAlign || 'left';
-    document.getElementById('prop-text-valign').value = state.selectedNode.textValign || 'top';
+    app.document.getElementById('prop-text').value = state.selectedNode.text || '';
+    app.document.getElementById('prop-text-halign').value = state.selectedNode.textAlign || 'left';
+    app.document.getElementById('prop-text-valign').value = state.selectedNode.textValign || 'top';
     const bgIdx = state.selectedNode.bgPaletteIndex !== undefined ? state.selectedNode.bgPaletteIndex : 1;
     const strokeIdx = state.selectedNode.strokePaletteIndex !== undefined ? state.selectedNode.strokePaletteIndex : 2;
-    document.getElementById('prop-bg-transparent').checked = state.selectedNode.bgTransparent || false;
-    document.getElementById('prop-stroke-transparent').checked = state.selectedNode.strokeTransparent || false;
-    document.getElementById('prop-auto-resize').checked = state.selectedNode.autoResize !== false;
+    app.document.getElementById('prop-bg-transparent').checked = state.selectedNode.bgTransparent || false;
+    app.document.getElementById('prop-stroke-transparent').checked = state.selectedNode.strokeTransparent || false;
+    app.document.getElementById('prop-auto-resize').checked = state.selectedNode.autoResize !== false;
     
     const isText = state.selectedNode.type === 'text';
     bgTransparentOpt.style.display = isText ? 'inline' : 'none';
@@ -948,13 +953,14 @@ function updatePropertiesPanel(state) {
   } else if (state.selectedEdge) {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'flex';
-    document.getElementById('prop-arrow-start').checked = state.selectedEdge.arrowStart || false;
-    document.getElementById('prop-arrow-end').checked = state.selectedEdge.arrowEnd || false;
+    app.document.getElementById('prop-arrow-start').checked = state.selectedEdge.arrowStart || false;
+    app.document.getElementById('prop-arrow-end').checked = state.selectedEdge.arrowEnd || false;
   }
 }
 
 function updatePaletteDisplay(containerId, context) {
-  const { state } = context;
+  const { state, app } = context;
+  const { document } = app;
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
@@ -980,7 +986,7 @@ function updatePaletteDisplay(containerId, context) {
     swatch.addEventListener('dblclick', () => {
       state.editingPaletteIndex = idx;
       state.editingPaletteType = containerId;
-      document.getElementById('palette-color-picker').click();
+      app.document.getElementById('palette-color-picker').click();
     });
     container.appendChild(swatch);
   });
@@ -994,24 +1000,24 @@ function initApp(context) {
   canvas.addEventListener('mouseup', () => handleMouseUp(context));
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
-  document.getElementById('btn-add-text').addEventListener('click', () => addTextNode(context));
-  document.getElementById('btn-add-circle').addEventListener('click', () => addCircleNode(context));
-  document.getElementById('btn-add-edge').addEventListener('click', () => addEdgeNode(context));
-  document.getElementById('btn-undo').addEventListener('click', () => undo(context));
-  document.getElementById('btn-redo').addEventListener('click', () => redo(context));
-  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+  app.document.getElementById('btn-add-text').addEventListener('click', () => addTextNode(context));
+  app.document.getElementById('btn-add-circle').addEventListener('click', () => addCircleNode(context));
+  app.document.getElementById('btn-add-edge').addEventListener('click', () => addEdgeNode(context));
+  app.document.getElementById('btn-undo').addEventListener('click', () => undo(context));
+  app.document.getElementById('btn-redo').addEventListener('click', () => redo(context));
+  app.document.getElementById('btn-zoom-in').addEventListener('click', () => {
     state.zoom = Math.min(5, state.zoom * 1.2);
     render(context);
   });
-  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+  app.document.getElementById('btn-zoom-out').addEventListener('click', () => {
     state.zoom = Math.max(0.1, state.zoom / 1.2);
     render(context);
   });
-  document.getElementById('btn-front').addEventListener('click', () => bringToFront(context));
-  document.getElementById('btn-back').addEventListener('click', () => sendToBack(context));
-  document.getElementById('btn-save').addEventListener('click', () => saveToFile(state));
-  document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
-  document.getElementById('btn-log').addEventListener('click', () => {
+  app.document.getElementById('btn-front').addEventListener('click', () => bringToFront(context));
+  app.document.getElementById('btn-back').addEventListener('click', () => sendToBack(context));
+  app.document.getElementById('btn-save').addEventListener('click', () => saveToFile(context));
+  app.document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
+  app.document.getElementById('btn-log').addEventListener('click', () => {
     const data = exportToObsidianCanvas(state);
     console.log(data);
   });
@@ -1019,11 +1025,11 @@ function initApp(context) {
     if (e.target.files[0]) loadFromFile(e.target.files[0], context);
   });
 
-  document.addEventListener('keydown', (e) => handleKeyDown(e, context));
+  app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));
 
   window.addEventListener('resize', () => resizeCanvas(context));
 
-  document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
+  app.document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
     if (state.selectedEdge) {
       state.selectedEdge.arrowStart = e.target.checked;
       render(context);
@@ -1031,7 +1037,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
+  app.document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
     if (state.selectedEdge) {
       state.selectedEdge.arrowEnd = e.target.checked;
       render(context);
@@ -1039,7 +1045,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-bg-transparent').addEventListener('change', (e) => {
+  app.document.getElementById('prop-bg-transparent').addEventListener('change', (e) => {
     if (state.selectedNode) {
       state.selectedNode.bgTransparent = e.target.checked;
       render(context);
@@ -1047,7 +1053,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-stroke-transparent').addEventListener('change', (e) => {
+  app.document.getElementById('prop-stroke-transparent').addEventListener('change', (e) => {
     if (state.selectedNode) {
       state.selectedNode.strokeTransparent = e.target.checked;
       render(context);
@@ -1055,7 +1061,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-auto-resize').addEventListener('change', (e) => {
+  app.document.getElementById('prop-auto-resize').addEventListener('change', (e) => {
     if (state.selectedNode) {
       state.selectedNode.autoResize = e.target.checked;
       if (e.target.checked && state.selectedNode.text) {
@@ -1066,7 +1072,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-text').addEventListener('input', (e) => {
+  app.document.getElementById('prop-text').addEventListener('input', (e) => {
     if (state.selectedNode) {
       state.selectedNode.text = e.target.value;
       if (state.selectedNode.autoResize !== false) {
@@ -1077,7 +1083,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-text-halign').addEventListener('change', (e) => {
+  app.document.getElementById('prop-text-halign').addEventListener('change', (e) => {
     if (state.selectedNode) {
       state.selectedNode.textAlign = e.target.value;
       render(context);
@@ -1085,7 +1091,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('prop-text-valign').addEventListener('change', (e) => {
+  app.document.getElementById('prop-text-valign').addEventListener('change', (e) => {
     if (state.selectedNode) {
       state.selectedNode.textValign = e.target.value;
       render(context);
@@ -1093,7 +1099,7 @@ function initApp(context) {
     }
   });
 
-  document.getElementById('palette-color-picker').addEventListener('input', (e) => {
+  app.document.getElementById('palette-color-picker').addEventListener('input', (e) => {
     if (state.editingPaletteIndex !== undefined) {
       const palettes = state.editingPaletteType === 'stroke-palette' ? state.strokePalettes : state.colorPalettes;
       palettes[state.editingPaletteIndex] = hexToRgba(e.target.value);
@@ -1110,14 +1116,14 @@ function initApp(context) {
   loadFromLocalStorage(state);
   state.historyManager.save(state);
   render(context);
-  updatePropertiesPanel(state);
+  updatePropertiesPanel(context);
 
   const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
   if (isDev) {
-    document.getElementById('btn-clear-storage').style.display = 'inline-block';
+    app.document.getElementById('btn-clear-storage').style.display = 'inline-block';
   }
 
-  document.getElementById('btn-clear-storage').addEventListener('click', () => {
+  app.document.getElementById('btn-clear-storage').addEventListener('click', () => {
     localStorage.removeItem('8bitcanvas-autosave');
     localStorage.removeItem('8bitcanvas-dev');
     location.reload();

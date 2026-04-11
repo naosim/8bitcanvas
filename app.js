@@ -196,18 +196,52 @@ function drawNode(node) {
     const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
     const bgTransparent = node.bgTransparent;
     const strokeTransparent = node.strokeTransparent;
+    const r = 4 * state.zoom;
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
-      ctx.fillRect(pos.x, pos.y, w, h);
+      ctx.beginPath();
+      ctx.moveTo(pos.x + r, pos.y);
+      ctx.lineTo(pos.x + w - r, pos.y);
+      ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
+      ctx.lineTo(pos.x + w, pos.y + h - r);
+      ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
+      ctx.lineTo(pos.x + r, pos.y + h);
+      ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
+      ctx.lineTo(pos.x, pos.y + r);
+      ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
+      ctx.closePath();
+      ctx.fill();
     }
     if (isSelected) {
       ctx.strokeStyle = '#ffff00';
       ctx.lineWidth = getStrokeWidth();
-      ctx.strokeRect(pos.x, pos.y, w, h);
+      ctx.beginPath();
+      ctx.moveTo(pos.x + r, pos.y);
+      ctx.lineTo(pos.x + w - r, pos.y);
+      ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
+      ctx.lineTo(pos.x + w, pos.y + h - r);
+      ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
+      ctx.lineTo(pos.x + r, pos.y + h);
+      ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
+      ctx.lineTo(pos.x, pos.y + r);
+      ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
+      ctx.closePath();
+      ctx.stroke();
     } else if (!strokeTransparent) {
       ctx.strokeStyle = strokeHex;
       ctx.lineWidth = getStrokeWidth();
-      ctx.strokeRect(pos.x, pos.y, w, h);
+      ctx.beginPath();
+      ctx.moveTo(pos.x + r, pos.y);
+      ctx.lineTo(pos.x + w - r, pos.y);
+      ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
+      ctx.lineTo(pos.x + w, pos.y + h - r);
+      ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
+      ctx.lineTo(pos.x + r, pos.y + h);
+      ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
+      ctx.lineTo(pos.x, pos.y + r);
+      ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
+      ctx.closePath();
+      ctx.stroke();
     }
     
     if (node.text && state.zoom > 0.3) {
@@ -245,66 +279,6 @@ function drawNode(node) {
         } else {
           ctx.textAlign = 'left';
           ctx.fillText(line, x, y);
-        }
-      });
-      ctx.textAlign = 'left';
-    }
-  } else if (node.type === 'rectangle') {
-    const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#4444aa';
-    const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
-    const r = 4 * state.zoom;
-    ctx.fillStyle = bgHex;
-    ctx.beginPath();
-    ctx.moveTo(pos.x + r, pos.y);
-    ctx.lineTo(pos.x + w - r, pos.y);
-    ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
-    ctx.lineTo(pos.x + w, pos.y + h - r);
-    ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
-    ctx.lineTo(pos.x + r, pos.y + h);
-    ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
-    ctx.lineTo(pos.x, pos.y + r);
-    ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-    ctx.lineWidth = getStrokeWidth();
-    ctx.stroke();
-
-    if (node.text && state.zoom > 0.3) {
-      const lines = node.text.split('\n');
-      const lineHeight = 18 * state.zoom;
-      const align = node.textAlign || 'center';
-      const valign = node.textValign || 'middle';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `${14 * state.zoom}px 'DotGothic16'`;
-
-      const totalTextHeight = lines.length * lineHeight;
-      let startY = pos.y + (h - totalTextHeight) / 2 + lineHeight - 4 * state.zoom;
-      
-      if (valign === 'top') {
-        startY = pos.y + 12 * state.zoom;
-      } else if (valign === 'bottom') {
-        startY = pos.y + h - totalTextHeight + 12 * state.zoom;
-      }
-
-      lines.forEach((line, i) => {
-        let x = pos.x + w / 2;
-        
-        if (align === 'left') {
-          x = pos.x + 12 * state.zoom;
-        } else if (align === 'right') {
-          x = pos.x + w - 12 * state.zoom;
-        }
-
-        if (align === 'center') {
-          ctx.textAlign = 'center';
-          ctx.fillText(line, x, startY + i * lineHeight);
-        } else if (align === 'right') {
-          ctx.textAlign = 'right';
-          ctx.fillText(line, x, startY + i * lineHeight);
-        } else {
-          ctx.textAlign = 'left';
-          ctx.fillText(line, x, startY + i * lineHeight);
         }
       });
       ctx.textAlign = 'left';
@@ -516,32 +490,6 @@ function addTextNode() {
   render();
 }
 
-function addRectNode() {
-  const id = 'node-' + Date.now();
-  const node = {
-    id,
-    type: 'rectangle',
-    x: -50,
-    y: -50,
-    width: 100,
-    height: 80,
-    bgPaletteIndex: 1,
-    bgTransparent: false,
-    strokePaletteIndex: 2,
-    strokeTransparent: false,
-    text: '',
-    textAlign: 'center',
-    textValign: 'middle',
-    autoResize: true
-  };
-  state.nodes.push(node);
-  state.selectedNode = node;
-  state.mode = 'select';
-  updatePropertiesPanel();
-  saveToHistory();
-  render();
-}
-
 function addCircleNode() {
   const id = 'node-' + Date.now();
   const node = {
@@ -612,16 +560,14 @@ function exportToObsidianCanvas() {
   const data = {
     nodes: state.nodes.map(n => ({
       id: n.id,
-      type: n.type,
+      type: n.type === 'circle' ? 'text' : n.type,
       x: Math.round(n.x),
       y: Math.round(n.y),
       width: n.width,
       height: n.height,
       text: n.text || '',
-      bgPaletteIndex: n.bgPaletteIndex,
-      bgTransparent: n.bgTransparent,
-      strokePaletteIndex: n.strokePaletteIndex,
-      strokeTransparent: n.strokeTransparent,
+      bg: state.colorPalettes[n.bgPaletteIndex] || '#000000',
+      color: state.strokePalettes[n.strokePaletteIndex] || '#ffffff',
       textAlign: n.textAlign,
       textValign: n.textValign
     })),
@@ -663,7 +609,24 @@ function loadFromFile(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (data.nodes) state.nodes = data.nodes;
+      if (data.nodes) {
+        state.nodes = data.nodes.map(n => {
+          const node = { ...n };
+          if (n.width <= 20 && n.height <= 20) {
+            node.type = 'circle';
+            node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+            node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
+          } else {
+            node.type = n.type || 'text';
+            node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+            node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
+          }
+          node.bgTransparent = n.bgTransparent || false;
+          node.strokeTransparent = n.strokeTransparent || false;
+          node.autoResize = n.autoResize !== undefined ? n.autoResize : true;
+          return node;
+        });
+      }
       if (data.edges) state.edges = data.edges;
       if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
       if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
@@ -679,6 +642,12 @@ function loadFromFile(file) {
     }
   };
   reader.readAsText(file);
+}
+
+function findPaletteIndex(palettes, color) {
+  if (!color) return 0;
+  const idx = palettes.indexOf(color);
+  return idx >= 0 ? idx : 0;
 }
 
 function loadFromLocalStorage() {
@@ -806,7 +775,6 @@ canvas.addEventListener('wheel', (e) => {
 });
 
 document.getElementById('btn-add-text').addEventListener('click', addTextNode);
-document.getElementById('btn-add-rect').addEventListener('click', addRectNode);
 document.getElementById('btn-add-circle').addEventListener('click', addCircleNode);
 document.getElementById('btn-add-edge').addEventListener('click', addEdgeNode);
 document.getElementById('btn-undo').addEventListener('click', undo);
@@ -878,40 +846,6 @@ document.addEventListener('keydown', (e) => {
       return;
     }
     deleteSelected();
-  }
-  if (e.key === 'Tab' && state.selectedNode && state.selectedNode.type === 'rectangle') {
-    e.preventDefault();
-    const prevNode = state.selectedNode;
-    
-    const newNode = {
-      id: 'node-' + Date.now(),
-      type: 'rectangle',
-      x: prevNode.x + prevNode.width + 50,
-      y: prevNode.y,
-      width: 100,
-      height: 80,
-      color: '#4444aa',
-      text: '',
-      textAlign: 'center',
-      textValign: 'middle'
-    };
-    state.nodes.push(newNode);
-    
-    const edge = {
-      id: 'edge-' + Date.now(),
-      fromNode: prevNode.id,
-      toNode: newNode.id,
-      fromSide: 'right',
-      toSide: 'left',
-      arrowStart: false,
-      arrowEnd: false
-    };
-    state.edges.push(edge);
-    
-    state.selectedNode = newNode;
-    updatePropertiesPanel();
-    saveToHistory();
-    render();
   }
 });
 

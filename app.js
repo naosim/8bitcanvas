@@ -2,7 +2,7 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
 
-function getStrokeWidth() {
+function getStrokeWidth(state) {
   return 3 * state.zoom;
 }
 
@@ -29,7 +29,9 @@ const state = {
     '#ff0000', '#00ff00', '#0000ff',
     '#ffff00', '#00ffff'
   ],
-  selectedPaletteIndex: 0
+  selectedPaletteIndex: 0,
+  editingPaletteIndex: undefined,
+  editingPaletteType: undefined
 };
 
 const OBSIDIAN_CANVAS_VERSION = '1.0.0';
@@ -50,25 +52,14 @@ function hexToRgba(hex, alpha = 1) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function rgbaToHex(rgba) {
-  const match = rgba.match(/rgba?\((\d+),(\d+),(\d+)/);
-  if (match) {
-    const r = parseInt(match[1]).toString(16).padStart(2, '0');
-    const g = parseInt(match[2]).toString(16).padStart(2, '0');
-    const b = parseInt(match[3]).toString(16).padStart(2, '0');
-    return '#' + r + g + b;
-  }
-  return '#000000';
-}
-
-function resizeCanvas() {
+function resizeCanvas(state) {
   const container = document.getElementById('canvas-container');
   canvas.width = container.offsetWidth;
   canvas.height = container.offsetHeight;
-  render();
+  render(state, ctx, canvas);
 }
 
-function autoResizeNode(node) {
+function autoResizeNode(node, state) {
   if (!node.text) return;
   const lines = node.text.split('\n');
   const minWidth = 80;
@@ -85,7 +76,7 @@ function autoResizeNode(node) {
   node.height = newHeight;
 }
 
-function saveToHistory() {
+function saveToHistory(state) {
   state.history = state.history.slice(0, state.historyIndex + 1);
   state.history.push(JSON.stringify({ nodes: state.nodes, edges: state.edges, colorPalettes: state.colorPalettes, strokePalettes: state.strokePalettes }));
   state.historyIndex++;
@@ -93,10 +84,10 @@ function saveToHistory() {
     state.history.shift();
     state.historyIndex--;
   }
-  autoSaveToLocalStorage();
+  autoSaveToLocalStorage(state);
 }
 
-function autoSaveToLocalStorage() {
+function autoSaveToLocalStorage(state) {
   const data = JSON.stringify({
     nodes: state.nodes,
     edges: state.edges,
@@ -106,7 +97,7 @@ function autoSaveToLocalStorage() {
   localStorage.setItem('8bitcanvas-autosave', data);
 }
 
-function undo() {
+function undo(state) {
   if (state.historyIndex > 0) {
     state.historyIndex--;
     const data = JSON.parse(state.history[state.historyIndex]);
@@ -116,11 +107,11 @@ function undo() {
     if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
     state.selectedNode = null;
     state.selectedEdge = null;
-    render();
+    render(state, ctx, canvas);
   }
 }
 
-function redo() {
+function redo(state) {
   if (state.historyIndex < state.history.length - 1) {
     state.historyIndex++;
     const data = JSON.parse(state.history[state.historyIndex]);
@@ -130,11 +121,11 @@ function redo() {
     if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
     state.selectedNode = null;
     state.selectedEdge = null;
-    render();
+    render(state, ctx, canvas);
   }
 }
 
-function screenToWorld(x, y) {
+function screenToWorld(x, y, state) {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -143,7 +134,7 @@ function screenToWorld(x, y) {
   };
 }
 
-function worldToScreen(x, y) {
+function worldToScreen(x, y, state) {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -152,7 +143,7 @@ function worldToScreen(x, y) {
   };
 }
 
-function drawGrid() {
+function drawGrid(state, ctx, canvas) {
   const gridSize = 32 * state.zoom;
   const offsetX = state.offset.x % gridSize;
   const offsetY = state.offset.y % gridSize;
@@ -170,7 +161,7 @@ function drawGrid() {
   }
   ctx.stroke();
 
-  const origin = worldToScreen(0, 0);
+  const origin = worldToScreen(0, 0, state);
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -181,8 +172,8 @@ function drawGrid() {
   ctx.stroke();
 }
 
-function drawNode(node) {
-  const pos = worldToScreen(node.x, node.y);
+function drawNode(node, state, ctx) {
+  const pos = worldToScreen(node.x, node.y, state);
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -214,7 +205,7 @@ function drawNode(node) {
     }
     if (isSelected) {
       ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = getStrokeWidth();
+      ctx.lineWidth = getStrokeWidth(state);
       ctx.beginPath();
       ctx.moveTo(pos.x + r, pos.y);
       ctx.lineTo(pos.x + w - r, pos.y);
@@ -229,7 +220,7 @@ function drawNode(node) {
       ctx.stroke();
     } else if (!strokeTransparent) {
       ctx.strokeStyle = strokeHex;
-      ctx.lineWidth = getStrokeWidth();
+      ctx.lineWidth = getStrokeWidth(state);
       ctx.beginPath();
       ctx.moveTo(pos.x + r, pos.y);
       ctx.lineTo(pos.x + w - r, pos.y);
@@ -296,7 +287,7 @@ function drawNode(node) {
     }
     if (!strokeTransparent) {
       ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-      ctx.lineWidth = getStrokeWidth();
+      ctx.lineWidth = getStrokeWidth(state);
       ctx.beginPath();
       ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
       ctx.stroke();
@@ -304,7 +295,7 @@ function drawNode(node) {
   }
 }
 
-function drawEdge(edge) {
+function drawEdge(edge, state, ctx) {
   const fromNode = state.nodes.find(n => n.id === edge.fromNode);
   const toNode = state.nodes.find(n => n.id === edge.toNode);
   if (!fromNode || !toNode) return;
@@ -318,11 +309,11 @@ function drawEdge(edge) {
     y: toNode.y + toNode.height / 2
   };
 
-  const fromEdgePoint = getRectEdgePoint(fromNode, fromCenter, toCenter);
-  const toEdgePoint = getRectEdgePoint(toNode, toCenter, fromCenter);
+  const fromEdgePoint = getRectEdgePoint(fromNode, fromCenter, toCenter, state);
+  const toEdgePoint = getRectEdgePoint(toNode, toCenter, fromCenter, state);
 
-  const from = worldToScreen(fromEdgePoint.x, fromEdgePoint.y);
-  const to = worldToScreen(toEdgePoint.x, toEdgePoint.y);
+  const from = worldToScreen(fromEdgePoint.x, fromEdgePoint.y, state);
+  const to = worldToScreen(toEdgePoint.x, toEdgePoint.y, state);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -334,7 +325,7 @@ function drawEdge(edge) {
   }
 
   ctx.strokeStyle = state.selectedEdge?.id === edge.id ? '#ffff00' : '#ffffff';
-  ctx.lineWidth = getStrokeWidth();
+  ctx.lineWidth = getStrokeWidth(state);
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
@@ -342,7 +333,7 @@ function drawEdge(edge) {
 
   function drawArrow(fromX, fromY, toX, toY) {
     const arrowAngle = Math.atan2(toY - fromY, toX - fromX);
-    const arrowLen = getStrokeWidth() * 4;
+    const arrowLen = getStrokeWidth(state) * 4;
     ctx.beginPath();
     ctx.moveTo(toX, toY);
     ctx.lineTo(toX - arrowLen * Math.cos(arrowAngle - Math.PI / 6), toY - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
@@ -359,7 +350,7 @@ function drawEdge(edge) {
   }
 }
 
-function getRectEdgePoint(node, from, to) {
+function getRectEdgePoint(node, from, to, state) {
   if (node.type === 'circle') {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -401,17 +392,17 @@ function getRectEdgePoint(node, from, to) {
   };
 }
 
-function render() {
+function render(state, ctx, canvas) {
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawGrid();
+  drawGrid(state, ctx, canvas);
 
-  state.nodes.forEach(drawNode);
-  state.edges.forEach(drawEdge);
+  state.nodes.forEach(node => drawNode(node, state, ctx));
+  state.edges.forEach(edge => drawEdge(edge, state, ctx));
 }
 
-function findNodeAt(x, y) {
-  const world = screenToWorld(x, y);
+function findNodeAt(x, y, state) {
+  const world = screenToWorld(x, y, state);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
@@ -422,7 +413,7 @@ function findNodeAt(x, y) {
   return null;
 }
 
-function findEdgeAt(x, y) {
+function findEdgeAt(x, y, state) {
   const threshold = 10;
   for (let i = state.edges.length - 1; i >= 0; i--) {
     const edge = state.edges[i];
@@ -430,8 +421,8 @@ function findEdgeAt(x, y) {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const from = worldToScreen(fromNode.x + fromNode.width / 2, fromNode.y + fromNode.height / 2);
-    const to = worldToScreen(toNode.x + toNode.width / 2, toNode.y + toNode.height / 2);
+    const from = worldToScreen(fromNode.x + fromNode.width / 2, fromNode.y + fromNode.height / 2, state);
+    const to = worldToScreen(toNode.x + toNode.width / 2, toNode.y + toNode.height / 2, state);
     
     const dist = pointToLineDistance(x, y, from.x, from.y, to.x, to.y);
     if (dist < threshold) {
@@ -464,7 +455,7 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function addTextNode() {
+function addTextNode(state) {
   const id = 'node-' + Date.now();
   const node = {
     id,
@@ -485,12 +476,12 @@ function addTextNode() {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel();
-  saveToHistory();
-  render();
+  updatePropertiesPanel(state);
+  saveToHistory(state);
+  render(state, ctx, canvas);
 }
 
-function addCircleNode() {
+function addCircleNode(state) {
   const id = 'node-' + Date.now();
   const node = {
     id,
@@ -507,35 +498,35 @@ function addCircleNode() {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
-  updatePropertiesPanel();
-  saveToHistory();
-  render();
+  updatePropertiesPanel(state);
+  saveToHistory(state);
+  render(state, ctx, canvas);
 }
 
-function deleteSelected() {
+function deleteSelected(state) {
   if (state.selectedNode) {
     state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode.id && e.toNode !== state.selectedNode.id);
     state.nodes = state.nodes.filter(n => n.id !== state.selectedNode.id);
     state.selectedNode = null;
-    saveToHistory();
-    render();
+    saveToHistory(state);
+    render(state, ctx, canvas);
   } else if (state.selectedEdge) {
     state.edges = state.edges.filter(e => e.id !== state.selectedEdge.id);
     state.selectedEdge = null;
-    saveToHistory();
-    render();
+    saveToHistory(state);
+    render(state, ctx, canvas);
   } else if (state.selectedNodes.length > 0) {
     state.selectedNodes.forEach(node => {
       state.edges = state.edges.filter(e => e.fromNode !== node.id && e.toNode !== node.id);
     });
     state.nodes = state.nodes.filter(n => !state.selectedNodes.includes(n));
     state.selectedNodes = [];
-    saveToHistory();
-    render();
+    saveToHistory(state);
+    render(state, ctx, canvas);
   }
 }
 
-function addEdgeNode() {
+function addEdgeNode(state) {
   if (state.selectedNodes.length >= 2) {
     const id = 'edge-' + Date.now();
     const edge = {
@@ -549,14 +540,14 @@ function addEdgeNode() {
     };
     state.edges.push(edge);
     state.selectedNodes = [];
-    saveToHistory();
-    render();
+    saveToHistory(state);
+    render(state, ctx, canvas);
   } else {
     alert('SHIFT押しながら2つのノードを選択してください');
   }
 }
 
-function exportToObsidianCanvas() {
+function exportToObsidianCanvas(state) {
   const data = {
     nodes: state.nodes.map(n => ({
       id: n.id,
@@ -591,8 +582,8 @@ function exportToObsidianCanvas() {
   return JSON.stringify(data, null, 2);
 }
 
-function saveToFile() {
-  const data = exportToObsidianCanvas();
+function saveToFile(state) {
+  const data = exportToObsidianCanvas(state);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -604,7 +595,7 @@ function saveToFile() {
   localStorage.setItem('8bitcanvas-autosave', data);
 }
 
-function loadFromFile(file) {
+function loadFromFile(file, state) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
@@ -635,8 +626,8 @@ function loadFromFile(file) {
         state.offset.x = -data.viewport.x * state.zoom;
         state.offset.y = -data.viewport.y * state.zoom;
       }
-      saveToHistory();
-      render();
+      saveToHistory(state);
+      render(state, ctx, canvas);
     } catch (err) {
       alert('ファイルの形式が正しくありません');
     }
@@ -650,7 +641,7 @@ function findPaletteIndex(palettes, color) {
   return idx >= 0 ? idx : 0;
 }
 
-function loadFromLocalStorage() {
+function loadFromLocalStorage(state) {
   const data = localStorage.getItem('8bitcanvas-autosave');
   if (data) {
     try {
@@ -659,19 +650,80 @@ function loadFromLocalStorage() {
       if (parsed.edges) state.edges = parsed.edges;
       if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
       if (parsed.strokePalettes) state.strokePalettes = parsed.strokePalettes;
-      saveToHistory();
+      saveToHistory(state);
     } catch (e) {}
   }
 }
 
-canvas.addEventListener('mousedown', (e) => {
+function bringToFront(state) {
+  if (state.selectedNode) {
+    const idx = state.nodes.indexOf(state.selectedNode);
+    if (idx > -1) {
+      state.nodes.splice(idx, 1);
+      state.nodes.push(state.selectedNode);
+      saveToHistory(state);
+      render(state, ctx, canvas);
+    }
+  } else if (state.selectedNodes.length > 0) {
+    state.selectedNodes.forEach(node => {
+      const idx = state.nodes.indexOf(node);
+      if (idx > -1) {
+        state.nodes.splice(idx, 1);
+      }
+    });
+    state.nodes.push(...state.selectedNodes);
+    saveToHistory(state);
+    render(state, ctx, canvas);
+  }
+}
+
+function sendToBack(state) {
+  if (state.selectedNode) {
+    const idx = state.nodes.indexOf(state.selectedNode);
+    if (idx > -1) {
+      state.nodes.splice(idx, 1);
+      state.nodes.unshift(state.selectedNode);
+      saveToHistory(state);
+      render(state, ctx, canvas);
+    }
+  } else if (state.selectedNodes.length > 0) {
+    const selectedIds = state.selectedNodes.map(n => n.id);
+    state.nodes = state.nodes.filter(n => !selectedIds.includes(n.id));
+    state.nodes.unshift(...state.selectedNodes);
+    saveToHistory(state);
+    render(state, ctx, canvas);
+  }
+}
+
+function handleKeyDown(e, state) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    if (e.shiftKey) redo(state);
+    else undo(state);
+  }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    const active = document.activeElement;
+    if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') {
+      return;
+    }
+    deleteSelected(state);
+  }
+}
+
+function handleWheel(e, state) {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  state.zoom = Math.max(0.1, Math.min(5, state.zoom * delta));
+  render(state, ctx, canvas);
+}
+
+function handleMouseDown(e, state) {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const node = findNodeAt(x, y);
+  const node = findNodeAt(x, y, state);
 
   if (node) {
-    const world = screenToWorld(x, y);
+    const world = screenToWorld(x, y, state);
     const resizeHandleSize = 10;
     const inResizeZone = 
       world.x >= node.x + node.width - resizeHandleSize &&
@@ -699,14 +751,14 @@ canvas.addEventListener('mousedown', (e) => {
       }
       state.selectedEdge = null;
       state.isDragging = true;
-      state.dragStart = screenToWorld(x, y);
+      state.dragStart = screenToWorld(x, y, state);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
       };
     }
   } else {
-    const edge = findEdgeAt(x, y);
+    const edge = findEdgeAt(x, y, state);
     if (edge) {
       state.selectedEdge = edge;
       state.selectedNode = null;
@@ -719,146 +771,62 @@ canvas.addEventListener('mousedown', (e) => {
       state.dragStart = { x: e.clientX, y: e.clientY };
     }
   }
-  updatePropertiesPanel();
-  render();
-});
+  updatePropertiesPanel(state);
+  render(state, ctx, canvas);
+}
 
-canvas.addEventListener('mousemove', (e) => {
+function handleMouseMove(e, state) {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
   if (state.isResizing && state.resizeNode) {
-    const world = screenToWorld(x, y);
+    const world = screenToWorld(x, y, state);
     const dx = world.x - state.resizeStart.x;
     const dy = world.y - state.resizeStart.y;
     const newWidth = Math.max(40, state.resizeStartSize.width + dx);
     const newHeight = Math.max(30, state.resizeStartSize.height + dy);
     state.resizeNode.width = newWidth;
     state.resizeNode.height = newHeight;
-    render();
+    render(state, ctx, canvas);
     return;
   }
 
   if (!state.isDragging) return;
 
   if (state.selectedNode) {
-    const world = screenToWorld(x, y);
+    const world = screenToWorld(x, y, state);
     state.selectedNode.x = world.x - state.dragOffset.x;
     state.selectedNode.y = world.y - state.dragOffset.y;
-    render();
+    render(state, ctx, canvas);
   } else {
     state.offset.x += e.clientX - state.dragStart.x;
     state.offset.y += e.clientY - state.dragStart.y;
     state.dragStart = { x: e.clientX, y: e.clientY };
-    render();
+    render(state, ctx, canvas);
   }
-});
+}
 
-canvas.addEventListener('mouseup', () => {
+function handleMouseUp(state) {
   if (state.isDragging && state.selectedNode) {
-    saveToHistory();
+    saveToHistory(state);
   }
   if (state.isResizing) {
-    saveToHistory();
+    saveToHistory(state);
   }
   state.isDragging = false;
   state.isResizing = false;
   state.resizeNode = null;
-});
+}
 
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  state.zoom = Math.max(0.1, Math.min(5, state.zoom * delta));
-  render();
-});
-
-document.getElementById('btn-add-text').addEventListener('click', addTextNode);
-document.getElementById('btn-add-circle').addEventListener('click', addCircleNode);
-document.getElementById('btn-add-edge').addEventListener('click', addEdgeNode);
-document.getElementById('btn-undo').addEventListener('click', undo);
-document.getElementById('btn-redo').addEventListener('click', redo);
-document.getElementById('btn-zoom-in').addEventListener('click', () => {
-  state.zoom = Math.min(5, state.zoom * 1.2);
-  render();
-});
-document.getElementById('btn-zoom-out').addEventListener('click', () => {
-  state.zoom = Math.max(0.1, state.zoom / 1.2);
-  render();
-});
-document.getElementById('btn-front').addEventListener('click', () => {
-  if (state.selectedNode) {
-    const idx = state.nodes.indexOf(state.selectedNode);
-    if (idx > -1) {
-      state.nodes.splice(idx, 1);
-      state.nodes.push(state.selectedNode);
-      saveToHistory();
-      render();
-    }
-  } else if (state.selectedNodes.length > 0) {
-    state.selectedNodes.forEach(node => {
-      const idx = state.nodes.indexOf(node);
-      if (idx > -1) {
-        state.nodes.splice(idx, 1);
-      }
-    });
-    state.nodes.push(...state.selectedNodes);
-    saveToHistory();
-    render();
-  }
-});
-document.getElementById('btn-back').addEventListener('click', () => {
-  if (state.selectedNode) {
-    const idx = state.nodes.indexOf(state.selectedNode);
-    if (idx > -1) {
-      state.nodes.splice(idx, 1);
-      state.nodes.unshift(state.selectedNode);
-      saveToHistory();
-      render();
-    }
-  } else if (state.selectedNodes.length > 0) {
-    const selectedIds = state.selectedNodes.map(n => n.id);
-    state.nodes = state.nodes.filter(n => !selectedIds.includes(n.id));
-    state.nodes.unshift(...state.selectedNodes);
-    saveToHistory();
-    render();
-  }
-});
-document.getElementById('btn-save').addEventListener('click', saveToFile);
-document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
-document.getElementById('btn-log').addEventListener('click', () => {
-  const data = exportToObsidianCanvas();
-  console.log(data);
-});
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files[0]) loadFromFile(e.target.files[0]);
-});
-
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    if (e.shiftKey) redo();
-    else undo();
-  }
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    const active = document.activeElement;
-    if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') {
-      return;
-    }
-    deleteSelected();
-  }
-});
-
-window.addEventListener('resize', resizeCanvas);
-
-function updatePropertiesPanel() {
+function updatePropertiesPanel(state) {
   const nodeProps = document.getElementById('node-props');
   const edgeProps = document.getElementById('edge-props');
   const bgTransparentOpt = document.querySelector('.transparent-option');
   const strokeTransparentOpt = document.querySelectorAll('.transparent-option')[1];
   
-  updatePaletteDisplay('bg-palette', state.selectedNode?.bgPaletteIndex ?? 1, 'bgPaletteIndex');
-  updatePaletteDisplay('stroke-palette', state.selectedNode?.strokePaletteIndex ?? 2, 'strokePaletteIndex');
+  updatePaletteDisplay('bg-palette', state.selectedNode?.bgPaletteIndex ?? 1, 'bgPaletteIndex', state);
+  updatePaletteDisplay('stroke-palette', state.selectedNode?.strokePaletteIndex ?? 2, 'strokePaletteIndex', state);
   
   if (state.selectedNode) {
     nodeProps.style.display = 'flex';
@@ -883,23 +851,7 @@ function updatePropertiesPanel() {
   }
 }
 
-document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
-  if (state.selectedEdge) {
-    state.selectedEdge.arrowStart = e.target.checked;
-    render();
-    saveToHistory();
-  }
-});
-
-document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
-  if (state.selectedEdge) {
-    state.selectedEdge.arrowEnd = e.target.checked;
-    render();
-    saveToHistory();
-  }
-});
-
-function updatePaletteDisplay(containerId, selectedIdx, propName) {
+function updatePaletteDisplay(containerId, selectedIdx, propName, state) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
@@ -914,10 +866,10 @@ function updatePaletteDisplay(containerId, selectedIdx, propName) {
     swatch.addEventListener('click', () => {
       if (state.selectedNode) {
         state.selectedNode[propName] = idx;
-        render();
-        updatePaletteDisplay('bg-palette', state.selectedNode.bgPaletteIndex, 'bgPaletteIndex');
-        updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex');
-        saveToHistory();
+        render(state, ctx, canvas);
+        updatePaletteDisplay('bg-palette', state.selectedNode.bgPaletteIndex, 'bgPaletteIndex', state);
+        updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex', state);
+        saveToHistory(state);
       }
     });
     swatch.addEventListener('dblclick', () => {
@@ -929,86 +881,140 @@ function updatePaletteDisplay(containerId, selectedIdx, propName) {
   });
 }
 
-document.getElementById('prop-bg-transparent').addEventListener('change', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.bgTransparent = e.target.checked;
-    render();
-    saveToHistory();
-  }
-});
+function initApp(state) {
+  canvas.addEventListener('mousedown', (e) => handleMouseDown(e, state));
+  canvas.addEventListener('mousemove', (e) => handleMouseMove(e, state));
+  canvas.addEventListener('mouseup', () => handleMouseUp(state));
+  canvas.addEventListener('wheel', (e) => handleWheel(e, state));
 
-document.getElementById('prop-stroke-transparent').addEventListener('change', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.strokeTransparent = e.target.checked;
-    render();
-    saveToHistory();
-  }
-});
+  document.getElementById('btn-add-text').addEventListener('click', () => addTextNode(state));
+  document.getElementById('btn-add-circle').addEventListener('click', () => addCircleNode(state));
+  document.getElementById('btn-add-edge').addEventListener('click', () => addEdgeNode(state));
+  document.getElementById('btn-undo').addEventListener('click', () => undo(state));
+  document.getElementById('btn-redo').addEventListener('click', () => redo(state));
+  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+    state.zoom = Math.min(5, state.zoom * 1.2);
+    render(state, ctx, canvas);
+  });
+  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+    state.zoom = Math.max(0.1, state.zoom / 1.2);
+    render(state, ctx, canvas);
+  });
+  document.getElementById('btn-front').addEventListener('click', () => bringToFront(state));
+  document.getElementById('btn-back').addEventListener('click', () => sendToBack(state));
+  document.getElementById('btn-save').addEventListener('click', () => saveToFile(state));
+  document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
+  document.getElementById('btn-log').addEventListener('click', () => {
+    const data = exportToObsidianCanvas(state);
+    console.log(data);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) loadFromFile(e.target.files[0], state);
+  });
 
-document.getElementById('prop-auto-resize').addEventListener('change', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.autoResize = e.target.checked;
-    if (e.target.checked && state.selectedNode.text) {
-      autoResizeNode(state.selectedNode);
+  document.addEventListener('keydown', (e) => handleKeyDown(e, state));
+
+  window.addEventListener('resize', () => resizeCanvas(state));
+
+  document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
+    if (state.selectedEdge) {
+      state.selectedEdge.arrowStart = e.target.checked;
+      render(state, ctx, canvas);
+      saveToHistory(state);
     }
-    render();
-    saveToHistory();
-  }
-});
+  });
 
-document.getElementById('prop-text').addEventListener('input', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.text = e.target.value;
-    if (state.selectedNode.autoResize !== false) {
-      autoResizeNode(state.selectedNode);
+  document.getElementById('prop-arrow-end').addEventListener('change', (e) => {
+    if (state.selectedEdge) {
+      state.selectedEdge.arrowEnd = e.target.checked;
+      render(state, ctx, canvas);
+      saveToHistory(state);
     }
-    render();
-    saveToHistory();
-  }
-});
+  });
 
-document.getElementById('prop-text-halign').addEventListener('change', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.textAlign = e.target.value;
-    render();
-    saveToHistory();
-  }
-});
-
-document.getElementById('prop-text-valign').addEventListener('change', (e) => {
-  if (state.selectedNode) {
-    state.selectedNode.textValign = e.target.value;
-    render();
-    saveToHistory();
-  }
-});
-
-document.getElementById('palette-color-picker').addEventListener('input', (e) => {
-  if (state.editingPaletteIndex !== undefined) {
-    const palettes = state.editingPaletteType === 'stroke-palette' ? state.strokePalettes : state.colorPalettes;
-    palettes[state.editingPaletteIndex] = hexToRgba(e.target.value);
+  document.getElementById('prop-bg-transparent').addEventListener('change', (e) => {
     if (state.selectedNode) {
-      updatePaletteDisplay('bg-palette', state.selectedNode.bgPaletteIndex, 'bgPaletteIndex');
-      updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex');
+      state.selectedNode.bgTransparent = e.target.checked;
+      render(state, ctx, canvas);
+      saveToHistory(state);
     }
-    render();
-    saveToHistory();
+  });
+
+  document.getElementById('prop-stroke-transparent').addEventListener('change', (e) => {
+    if (state.selectedNode) {
+      state.selectedNode.strokeTransparent = e.target.checked;
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  document.getElementById('prop-auto-resize').addEventListener('change', (e) => {
+    if (state.selectedNode) {
+      state.selectedNode.autoResize = e.target.checked;
+      if (e.target.checked && state.selectedNode.text) {
+        autoResizeNode(state.selectedNode, state);
+      }
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  document.getElementById('prop-text').addEventListener('input', (e) => {
+    if (state.selectedNode) {
+      state.selectedNode.text = e.target.value;
+      if (state.selectedNode.autoResize !== false) {
+        autoResizeNode(state.selectedNode, state);
+      }
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  document.getElementById('prop-text-halign').addEventListener('change', (e) => {
+    if (state.selectedNode) {
+      state.selectedNode.textAlign = e.target.value;
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  document.getElementById('prop-text-valign').addEventListener('change', (e) => {
+    if (state.selectedNode) {
+      state.selectedNode.textValign = e.target.value;
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  document.getElementById('palette-color-picker').addEventListener('input', (e) => {
+    if (state.editingPaletteIndex !== undefined) {
+      const palettes = state.editingPaletteType === 'stroke-palette' ? state.strokePalettes : state.colorPalettes;
+      palettes[state.editingPaletteIndex] = hexToRgba(e.target.value);
+      if (state.selectedNode) {
+        updatePaletteDisplay('bg-palette', state.selectedNode.bgPaletteIndex, 'bgPaletteIndex', state);
+        updatePaletteDisplay('stroke-palette', state.selectedNode.strokePaletteIndex, 'strokePaletteIndex', state);
+      }
+      render(state, ctx, canvas);
+      saveToHistory(state);
+    }
+  });
+
+  resizeCanvas(state);
+  loadFromLocalStorage(state);
+  saveToHistory(state);
+  render(state, ctx, canvas);
+  updatePropertiesPanel(state);
+
+  const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
+  if (isDev) {
+    document.getElementById('btn-clear-storage').style.display = 'inline-block';
   }
-});
 
-resizeCanvas();
-loadFromLocalStorage();
-saveToHistory();
-render();
-updatePropertiesPanel();
-
-const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
-if (isDev) {
-  document.getElementById('btn-clear-storage').style.display = 'inline-block';
+  document.getElementById('btn-clear-storage').addEventListener('click', () => {
+    localStorage.removeItem('8bitcanvas-autosave');
+    localStorage.removeItem('8bitcanvas-dev');
+    location.reload();
+  });
 }
 
-document.getElementById('btn-clear-storage').addEventListener('click', () => {
-  localStorage.removeItem('8bitcanvas-autosave');
-  localStorage.removeItem('8bitcanvas-dev');
-  location.reload();
-});
+initApp(state);

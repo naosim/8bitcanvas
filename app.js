@@ -29,6 +29,13 @@ class HistoryManager {
       this.history.shift();
       this.historyIndex--;
     }
+    const data = JSON.stringify({
+      nodes: state.nodes,
+      edges: state.edges,
+      colorPalettes: state.colorPalettes,
+      strokePalettes: state.strokePalettes
+    });
+    localStorage.setItem('8bitcanvas-autosave', data);
   }
 
   undo(state) {
@@ -68,7 +75,7 @@ class HistoryManager {
   }
 }
 
-const state = {
+const _state = {
   nodes: [],
   edges: [],
   selectedNode: null,
@@ -95,7 +102,7 @@ const state = {
   editingPaletteType: undefined
 };
 
-const context = { state, app:_app };
+const _context = { state:_state, app:_app };
 
 const OBSIDIAN_CANVAS_VERSION = '1.0.0';
 
@@ -543,14 +550,14 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function addTextNode(context) {
+function addTextNode(context, x, y) {
   const { state } = context;
   const id = 'node-' + Date.now();
   const node = {
     id,
     type: 'text',
-    x: -50,
-    y: -50,
+    x: x !== undefined ? x : -50,
+    y: y !== undefined ? y : -50,
     width: 120,
     height: 60,
     text: 'テキスト',
@@ -795,12 +802,37 @@ function sendToBack(context) {
 
 function handleKeyDown(e, context) {
   const { state, app } = context;
+  const { document } = app;
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
     if (e.shiftKey) redo(context);
     else undo(context);
   }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    if (state.selectedNode) {
+      const fromNode = state.selectedNode;
+      const newX = fromNode.x + fromNode.width + 20;
+      const newY = fromNode.y;
+      addTextNode(context, newX, newY);
+      const toNode = state.selectedNode;
+      if (fromNode && toNode && fromNode.id !== toNode.id) {
+        const edge = {
+          id: 'edge-' + Date.now(),
+          fromNode: fromNode.id,
+          toNode: toNode.id,
+          fromSide: 'bottom',
+          toSide: 'top',
+          arrowStart: false,
+          arrowEnd: false
+        };
+        state.edges.push(edge);
+        state.historyManager.save(state);
+        render(context);
+      }
+    }
+  }
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    const active = app.document.activeElement;
+    const active = document.activeElement;
     if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT') {
       return;
     }
@@ -1130,4 +1162,4 @@ function initApp(context) {
   });
 }
 
-initApp(context);
+initApp(_context);

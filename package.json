@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "Canvas-based node editor",
   "scripts": {
-    "build": "tsc",
+    "build": "bash build.sh",
     "watch": "tsc --watch"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "typescript": "^5.0.0"
   }
 }

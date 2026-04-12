@@ -1,15 +1,20 @@
+/** @category util */
 interface Point {
   x: number;
   y: number;
 }
 
-interface CanvasNode {
-  id: string;
+/** @category util */
+interface Figure {
   type: 'text' | 'circle';
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+interface CanvasNode extends Figure {
+  id: string;
   text?: string;
   textAlign?: 'left' | 'center' | 'right';
   textValign?: 'top' | 'center' | 'bottom';
@@ -72,6 +77,7 @@ const _app: App = {
   ctx: (document.getElementById('canvas') as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D,
   fileInput: document.getElementById('file-input') as HTMLInputElement
 };
+
 
 function getStrokeWidth(zoom: number): number {
   return 3 * zoom;
@@ -179,6 +185,7 @@ const _state: State = {
 
 const context: Context = { state: _state, app: _app };
 
+/** @category util */
 function rgbaToHex(rgba: string): string {
   const match = rgba.match(/rgba?\((\d+),(\d+),(\d+),?([\d.]+)?\)/);
   if (!match) return '#000000';
@@ -188,6 +195,7 @@ function rgbaToHex(rgba: string): string {
   return '#' + r + g + b;
 }
 
+/** @category util */
 function hexToRgba(hex: string, alpha: number = 1): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -195,11 +203,16 @@ function hexToRgba(hex: string, alpha: number = 1): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function resizeCanvas(app: App): void {
-  const { canvas } = app;
+/** @category util */
+function resizeCanvas(app: {document: Document, canvas: HTMLCanvasElement}): void {
+  const { canvas } = app;//HTMLCanvasElement
   const container = app.document.getElementById('canvas-container') as HTMLElement;
   canvas.width = container.offsetWidth;
   canvas.height = container.offsetHeight;
+}
+
+function resizeCanvasWithRender(app: App) {
+  resizeCanvas(app);
   render();
 }
 
@@ -207,21 +220,28 @@ const HORIZONTAL_PADDING = 18;
 const VERTICAL_PADDING = 32;
 const LINE_HEIGHT = 18;
 
+/** @category util */
+function calcTextRectSize(text: string, font: string, lineHeight: number, ctx: CanvasRenderingContext2D) {
+  const lines = text.split('\n');
+  ctx.font = font;
+  let maxWidth = 0;
+  lines.forEach(line => {
+    const metrics = ctx.measureText(line);
+    if (metrics.width > maxWidth) maxWidth = metrics.width;
+  });
+  return {width: maxWidth, height: lines.length * lineHeight};
+}
+
 function autoResizeNode(node: CanvasNode, context: Context): void {
-   const { app } = context;
-   const { ctx } = app;
-   if (!node.text) return;
-   const lines = node.text.split('\n');
-   const minWidth = 80;
-   const minHeight = 40;
-   ctx.font = "14px 'DotGothic16'";
-   let maxWidth = 0;
-   lines.forEach(line => {
-     const metrics = ctx.measureText(line);
-     if (metrics.width > maxWidth) maxWidth = metrics.width;
-   });
-   node.width = Math.max(minWidth, maxWidth + HORIZONTAL_PADDING);
-   node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + VERTICAL_PADDING);
+  const { app } = context;
+  const { ctx } = app;
+  if (!node.text) return;
+  const {width, height} = calcTextRectSize(node.text, "14px 'DotGothic16'", LINE_HEIGHT, ctx);
+
+  const minWidth = 80;
+  const minHeight = 40;
+  node.width = Math.max(minWidth, width + HORIZONTAL_PADDING);
+  node.height = Math.max(minHeight, height + VERTICAL_PADDING);
 }
 
 function undo(state: State): void {
@@ -236,7 +256,8 @@ function redo(state: State): void {
   }
 }
 
-function screenToWorld(point: Point, state: State, canvas: HTMLCanvasElement): Point {
+/** @category util */
+function screenToWorld(point: Point, state: {offset:Point, zoom:number}, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -245,7 +266,8 @@ function screenToWorld(point: Point, state: State, canvas: HTMLCanvasElement): P
   };
 }
 
-function worldToScreen(point: Point, state: State, canvas: HTMLCanvasElement): Point {
+/** @category util */
+function worldToScreen(point: Point, state: {offset:Point, zoom:number}, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -470,7 +492,8 @@ function drawEdge(edge: Edge, context: Context): void {
   }
 }
 
-function getRectEdgePoint(node: CanvasNode, toNode: CanvasNode): Point {
+/** @category util */
+function getRectEdgePoint(node: Figure, toNode: Figure): Point {
   const from: Point = {
     x: node.x + node.width / 2,
     y: node.y + node.height / 2
@@ -566,6 +589,7 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
   return null;
 }
 
+/** @category util */
 function pointToLineDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const A = px - x1;
   const B = py - y1;
@@ -771,6 +795,7 @@ function loadFromFile(file: File, context: Context): void {
   reader.readAsText(file);
 }
 
+/** @category util */
 function findPaletteIndex(palettes: string[], color: string | undefined): number {
   if (!color) return 0;
   const idx = palettes.indexOf(color);
@@ -1081,7 +1106,7 @@ function initApp(context: Context): void {
 
   app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));
 
-  window.addEventListener('resize', () => resizeCanvas(_app));
+  window.addEventListener('resize', () => resizeCanvasWithRender(_app));
 
   app.document.getElementById('prop-arrow-start')!.addEventListener('change', (e) => {
     if (context.state.selectedEdge) {
@@ -1166,11 +1191,11 @@ function initApp(context: Context): void {
     }
   });
 
-  resizeCanvas(_app);
+  resizeCanvasWithRender(_app);
   loadFromLocalStorage(context.state);
   context.state.historyManager.save(context.state);
   render();
-  updatePropertiesPanel(_state, app);
+  updatePropertiesPanel(_state, _app);
 
   const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
   if (isDev) {

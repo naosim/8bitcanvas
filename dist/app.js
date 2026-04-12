@@ -101,6 +101,7 @@ const _state = {
     editingPaletteType: undefined
 };
 const context = { state: _state, app: _app };
+/** @category util */
 function rgbaToHex(rgba) {
     const match = rgba.match(/rgba?\((\d+),(\d+),(\d+),?([\d.]+)?\)/);
     if (!match)
@@ -110,39 +111,49 @@ function rgbaToHex(rgba) {
     const b = parseInt(match[3]).toString(16).padStart(2, '0');
     return '#' + r + g + b;
 }
+/** @category util */
 function hexToRgba(hex, alpha = 1) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r},${g},${b},${alpha})`;
 }
+/** @category util */
 function resizeCanvas(app) {
-    const { canvas } = app;
+    const { canvas } = app; //HTMLCanvasElement
     const container = app.document.getElementById('canvas-container');
     canvas.width = container.offsetWidth;
     canvas.height = container.offsetHeight;
+}
+function resizeCanvasWithRender(app) {
+    resizeCanvas(app);
     render();
 }
 const HORIZONTAL_PADDING = 18;
 const VERTICAL_PADDING = 32;
 const LINE_HEIGHT = 18;
-function autoResizeNode(node, context) {
-    const { app } = context;
-    const { ctx } = app;
-    if (!node.text)
-        return;
-    const lines = node.text.split('\n');
-    const minWidth = 80;
-    const minHeight = 40;
-    ctx.font = "14px 'DotGothic16'";
+/** @category util */
+function calcTextRectSize(text, font, lineHeight, ctx) {
+    const lines = text.split('\n');
+    ctx.font = font;
     let maxWidth = 0;
     lines.forEach(line => {
         const metrics = ctx.measureText(line);
         if (metrics.width > maxWidth)
             maxWidth = metrics.width;
     });
-    node.width = Math.max(minWidth, maxWidth + HORIZONTAL_PADDING);
-    node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + VERTICAL_PADDING);
+    return { width: maxWidth, height: lines.length * lineHeight };
+}
+function autoResizeNode(node, context) {
+    const { app } = context;
+    const { ctx } = app;
+    if (!node.text)
+        return;
+    const { width, height } = calcTextRectSize(node.text, "14px 'DotGothic16'", LINE_HEIGHT, ctx);
+    const minWidth = 80;
+    const minHeight = 40;
+    node.width = Math.max(minWidth, width + HORIZONTAL_PADDING);
+    node.height = Math.max(minHeight, height + VERTICAL_PADDING);
 }
 function undo(state) {
     if (state.historyManager.undo(state)) {
@@ -154,6 +165,7 @@ function redo(state) {
         render();
     }
 }
+/** @category util */
 function screenToWorld(point, state, canvas) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
@@ -162,6 +174,7 @@ function screenToWorld(point, state, canvas) {
         y: (point.y - centerY - state.offset.y) / state.zoom
     };
 }
+/** @category util */
 function worldToScreen(point, state, canvas) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
@@ -372,6 +385,7 @@ function drawEdge(edge, context) {
         drawArrow(from, to);
     }
 }
+/** @category util */
 function getRectEdgePoint(node, toNode) {
     const from = {
         x: node.x + node.width / 2,
@@ -459,6 +473,7 @@ function findEdgeAt(point, context) {
     }
     return null;
 }
+/** @category util */
 function pointToLineDistance(px, py, x1, y1, x2, y2) {
     const A = px - x1;
     const B = py - y1;
@@ -669,6 +684,7 @@ function loadFromFile(file, context) {
     };
     reader.readAsText(file);
 }
+/** @category util */
 function findPaletteIndex(palettes, color) {
     if (!color)
         return 0;
@@ -974,7 +990,7 @@ function initApp(context) {
             loadFromFile(target.files[0], context);
     });
     app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));
-    window.addEventListener('resize', () => resizeCanvas(_app));
+    window.addEventListener('resize', () => resizeCanvasWithRender(_app));
     app.document.getElementById('prop-arrow-start').addEventListener('change', (e) => {
         if (context.state.selectedEdge) {
             context.state.selectedEdge.arrowStart = e.target.checked;
@@ -1049,11 +1065,11 @@ function initApp(context) {
             context.state.historyManager.save(context.state);
         }
     });
-    resizeCanvas(_app);
+    resizeCanvasWithRender(_app);
     loadFromLocalStorage(context.state);
     context.state.historyManager.save(context.state);
     render();
-    updatePropertiesPanel(_state, app);
+    updatePropertiesPanel(_state, _app);
     const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
     if (isDev) {
         app.document.getElementById('btn-clear-storage').style.display = 'inline-block';

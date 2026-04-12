@@ -5,12 +5,13 @@ export interface Point {
   y: number;
 }
 
-export interface Figure {
-  type: 'text' | 'circle';
-  x: number;
-  y: number;
+export interface Size {
   width: number;
   height: number;
+}
+
+export interface Figure extends Point, Size {
+  type: 'text' | 'circle';
 }
 
 export function rgbaToHex(rgba: string): string {
@@ -45,19 +46,21 @@ export function calcTextRectSize(text: string, font: string, lineHeight: number,
   };
 }
 
-export function screenToWorld(point: Point, state: { offset: Point, zoom: number }, canvasCenter: Point): Point {
-  const centerX = canvasCenter.x;
-  const centerY = canvasCenter.y;
+export function screenToWorld(point: Point, state: { offset: Point, zoom: number }, canvas: Size): Point {
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
   return {
     x: (point.x - centerX - state.offset.x) / state.zoom,
     y: (point.y - centerY - state.offset.y) / state.zoom
   };
 }
 
-export function worldToScreen(point: Point, state: { offset: Point, zoom: number }, canvasCenter: Point): Point {
+export function worldToScreen(point: Point, state: { offset: Point, zoom: number }, canvas: Size): Point {
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
   return {
-    x: point.x * state.zoom + state.offset.x + canvasCenter.x,
-    y: point.y * state.zoom + state.offset.y + canvasCenter.y
+    x: point.x * state.zoom + state.offset.x + centerX,
+    y: point.y * state.zoom + state.offset.y + centerY
   };
 }
 

@@ -251,7 +251,7 @@ function drawGrid(app: App, state: State): void {
   }
   ctx.stroke();
 
-  const origin = worldToScreen({ x: 0, y: 0 }, state, center(canvas));
+  const origin = worldToScreen({ x: 0, y: 0 }, state, canvas);
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -262,19 +262,11 @@ function drawGrid(app: App, state: State): void {
   ctx.stroke();
 }
 
-function center(size:{width:number, height:number}): Point {
-  return {
-    x: size.width / 2,
-    y: size.height / 2
-  }
-
-}
-
 function drawNode(node: CanvasNode, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
 
-  const pos = worldToScreen({ x: node.x, y: node.y }, state, center(canvas));
+  const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -419,9 +411,8 @@ function drawEdge(edge: Edge, context: Context): void {
   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-  const canvasCenter = center(canvas)
-  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, canvasCenter);
-  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, canvasCenter);
+  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, canvas);
+  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, canvas);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -476,8 +467,7 @@ const render = () => renderFull(context);
 
 function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const { state, app } = context;
-  const canvasCenter = center(app.canvas);
-  const world = screenToWorld(point, context.state, canvasCenter);
+  const world = screenToWorld(point, context.state, app.canvas);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
@@ -497,9 +487,8 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const canvasCenter = center(context.app.canvas);
-    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, canvasCenter);
-    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, canvasCenter);
+    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
+    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
 
     const dist = pointToLineDistance(point, from, to);
     if (dist < threshold) {
@@ -806,10 +795,9 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const node = findNodeAt({ x, y }, context);
-  const canvasCenter = center(canvas);
 
   if (node) {
-    const world = screenToWorld({ x, y }, context.state, canvasCenter);
+    const world = screenToWorld({ x, y }, context.state, canvas);
     const resizeHandleSize = 10;
     const inResizeZone =
       world.x >= node.x + node.width - resizeHandleSize &&
@@ -837,7 +825,7 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
       }
       state.selectedEdge = null;
       state.isDragging = true;
-      state.dragStart = screenToWorld({ x, y }, context.state, canvasCenter);
+      state.dragStart = screenToWorld({ x, y }, context.state, canvas);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
@@ -867,10 +855,9 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const canvasCenter = center(canvas);
 
   if (state.isResizing && state.resizeNode) {
-    const world = screenToWorld({ x, y }, context.state, canvasCenter);
+    const world = screenToWorld({ x, y }, context.state, canvas);
     const dx = world.x - state.resizeStart!.x;
     const dy = world.y - state.resizeStart!.y;
     const newWidth = Math.max(40, state.resizeStartSize!.width + dx);
@@ -884,7 +871,7 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   if (!state.isDragging) return;
 
   if (state.selectedNode) {
-    const world = screenToWorld({ x, y }, context.state, canvasCenter);
+    const world = screenToWorld({ x, y }, context.state, canvas);
     state.selectedNode.x = world.x - state.dragOffset.x;
     state.selectedNode.y = world.y - state.dragOffset.y;
     render();

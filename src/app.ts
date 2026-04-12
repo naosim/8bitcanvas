@@ -15,8 +15,8 @@ import {
 } from './util';
 
 const STORAGE_KEYS = {
-  AUTOSAVE: '8bitcanvas-autosave',
-  DEV_MODE: '8bitcanvas-dev'
+  AUTOSAVE: 'tinytidycanvas-autosave',
+  DEV_MODE: 'tinytidycanvas-dev'
 } as const;
 
 interface CanvasNode extends Figure {

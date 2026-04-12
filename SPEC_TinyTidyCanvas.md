@@ -61,6 +61,10 @@ Obsidian Canvas形式
 - 単一選択：クリック
 - 複数選択：SHIFT+クリック
 - 削除：DeleteキーまたはBackspaceキー（テキスト入力中は無効）
+- エッジ選択：エッジ上のクリックで選択
+
+#### パン
+- キャンバス上の何もない部分をドラッグしてパン移動
 
 #### ファイル入出力
 - ファイル保存（JSON Canvas形式）
@@ -71,6 +75,7 @@ Obsidian Canvas形式
 #### 表示高速化
 - ズーム率が0.3以下の時、テキストを描画しない
 - 画面外のノード/エッジは描画しない
+- ズーム範囲：0.1〜5
 
 #### Obsidian向けエクスポート
 - 円ノードはObsidianで表示できないため、テキストノードとして出力
@@ -134,6 +139,20 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
 // BAD: グローバル変数アクセス
 function render(): void {
   ctx.fillRect(0, 0, canvas.width, canvas.height); // NG!
+}
+```
+
+### 型定義
+
+```typescript
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface Size {
+  width: number;
+  height: number;
 }
 ```
 

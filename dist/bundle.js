@@ -112,8 +112,8 @@
 
   // src/app.ts
   var STORAGE_KEYS = {
-    AUTOSAVE: "8bitcanvas-autosave",
-    DEV_MODE: "8bitcanvas-dev"
+    AUTOSAVE: "tinytidycanvas-autosave",
+    DEV_MODE: "tinytidycanvas-dev"
   };
   var _app = {
     document,

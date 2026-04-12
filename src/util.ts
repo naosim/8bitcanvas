@@ -54,12 +54,10 @@ export function screenToWorld(point: Point, state: { offset: Point, zoom: number
   };
 }
 
-export function worldToScreen(point: Point, state: { offset: Point, zoom: number }, canvas: HTMLCanvasElement): Point {
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+export function worldToScreen(point: Point, state: { offset: Point, zoom: number }, canvasCenter: Point): Point {
   return {
-    x: point.x * state.zoom + state.offset.x + centerX,
-    y: point.y * state.zoom + state.offset.y + centerY
+    x: point.x * state.zoom + state.offset.x + canvasCenter.x,
+    y: point.y * state.zoom + state.offset.y + canvasCenter.y
   };
 }
 

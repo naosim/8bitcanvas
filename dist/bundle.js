@@ -29,12 +29,10 @@
       y: (point.y - centerY - state.offset.y) / state.zoom
     };
   }
-  function worldToScreen(point, state, canvas) {
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+  function worldToScreen(point, state, canvasCenter) {
     return {
-      x: point.x * state.zoom + state.offset.x + centerX,
-      y: point.y * state.zoom + state.offset.y + centerY
+      x: point.x * state.zoom + state.offset.x + canvasCenter.x,
+      y: point.y * state.zoom + state.offset.y + canvasCenter.y
     };
   }
   function getRectEdgePoint(node, toNode) {
@@ -265,7 +263,11 @@
       ctx.lineTo(canvas.width, y);
     }
     ctx.stroke();
-    const origin = worldToScreen({ x: 0, y: 0 }, state, canvas);
+    const canvasCenter = {
+      x: canvas.width / 2,
+      y: canvas.height / 2
+    };
+    const origin = worldToScreen({ x: 0, y: 0 }, state, canvasCenter);
     ctx.strokeStyle = "#666";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -278,7 +280,11 @@
   function drawNode(node, context2) {
     const { state, app } = context2;
     const { ctx, canvas } = app;
-    const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
+    const canvasCenter = {
+      x: canvas.width / 2,
+      y: canvas.height / 2
+    };
+    const pos = worldToScreen({ x: node.x, y: node.y }, state, canvasCenter);
     const w = node.width * state.zoom;
     const h = node.height * state.zoom;
     const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -411,8 +417,12 @@
     };
     const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
     const toEdgePoint = getRectEdgePoint(toNode, fromNode);
-    const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context2.state, context2.app.canvas);
-    const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context2.state, context2.app.canvas);
+    const canvasCenter = {
+      x: canvas.width / 2,
+      y: canvas.height / 2
+    };
+    const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context2.state, canvasCenter);
+    const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context2.state, canvasCenter);
     const minX = Math.min(from.x, to.x);
     const maxX = Math.max(from.x, to.x);
     const minY = Math.min(from.y, to.y);
@@ -472,8 +482,12 @@
       const fromNode = state.nodes.find((n) => n.id === edge.fromNode);
       const toNode = state.nodes.find((n) => n.id === edge.toNode);
       if (!fromNode || !toNode) continue;
-      const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context2.state, context2.app.canvas);
-      const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context2.state, context2.app.canvas);
+      const canvasCenter = {
+        x: context2.app.canvas.width / 2,
+        y: context2.app.canvas.height / 2
+      };
+      const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context2.state, canvasCenter);
+      const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context2.state, canvasCenter);
       const dist = pointToLineDistance(point, from, to);
       if (dist < threshold) {
         return edge;

@@ -246,7 +246,11 @@ function drawGrid(app: App, state: State): void {
   }
   ctx.stroke();
 
-  const origin = worldToScreen({ x: 0, y: 0 }, state, canvas);
+  const canvasCenter = {
+    x: canvas.width / 2,
+    y: canvas.height / 2
+  };
+  const origin = worldToScreen({ x: 0, y: 0 }, state, canvasCenter);
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -260,7 +264,11 @@ function drawGrid(app: App, state: State): void {
 function drawNode(node: CanvasNode, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
-  const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
+  const canvasCenter = {
+    x: canvas.width / 2,
+    y: canvas.height / 2
+  };
+  const pos = worldToScreen({ x: node.x, y: node.y }, state, canvasCenter);
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -405,8 +413,12 @@ function drawEdge(edge: Edge, context: Context): void {
   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, context.app.canvas);
-  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, context.app.canvas);
+  const canvasCenter = {
+    x: canvas.width / 2,
+    y: canvas.height / 2
+  };
+  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, canvasCenter);
+  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, canvasCenter);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -481,8 +493,12 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
-    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
+    const canvasCenter = {
+      x: context.app.canvas.width / 2,
+      y: context.app.canvas.height / 2
+    };
+    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, canvasCenter);
+    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, canvasCenter);
 
     const dist = pointToLineDistance(point, from, to);
     if (dist < threshold) {

@@ -38,17 +38,10 @@ export function resizeCanvas(app: { document: Document, canvas: HTMLCanvasElemen
 
 export function calcTextRectSize(text: string, font: string, lineHeight: number, ctx: CanvasRenderingContext2D) {
   const lines = text.split('\n');
-  const minWidth = 80;
-  const minHeight = 40;
   ctx.font = font;
-  let maxWidth = 0;
-  lines.forEach(line => {
-    const metrics = ctx.measureText(line);
-    if (metrics.width > maxWidth) maxWidth = metrics.width;
-  });
   return {
-    width: Math.max(minWidth, maxWidth + 22),
-    height: Math.max(minHeight, lines.length * lineHeight + 22)
+    width: lines.reduce((memo, line) => Math.max(memo, ctx.measureText(line).width), 0),
+    height: lines.length * lineHeight
   };
 }
 

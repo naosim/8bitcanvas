@@ -45,9 +45,9 @@ export function calcTextRectSize(text: string, font: string, lineHeight: number,
   };
 }
 
-export function screenToWorld(point: Point, state: { offset: Point, zoom: number }, canvas: HTMLCanvasElement): Point {
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+export function screenToWorld(point: Point, state: { offset: Point, zoom: number }, canvasCenter: Point): Point {
+  const centerX = canvasCenter.x;
+  const centerY = canvasCenter.y;
   return {
     x: (point.x - centerX - state.offset.x) / state.zoom,
     y: (point.y - centerY - state.offset.y) / state.zoom

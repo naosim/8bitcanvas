@@ -12,6 +12,6 @@
     "sourceMap": true,
     "lib": ["ES2020", "DOM"]
   },
-  "include": ["app.ts"],
+  "include": ["src/app.ts"],
   "exclude": ["node_modules", "dist"]
 }

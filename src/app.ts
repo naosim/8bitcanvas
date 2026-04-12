@@ -14,6 +14,11 @@ import {
   calcTextRectSize
 } from './util';
 
+const STORAGE_KEYS = {
+  AUTOSAVE: '8bitcanvas-autosave',
+  DEV_MODE: '8bitcanvas-dev'
+} as const;
+
 interface CanvasNode extends Figure {
   id: string;
   text?: string;
@@ -112,7 +117,7 @@ class HistoryManager {
       colorPalettes: state.colorPalettes,
       strokePalettes: state.strokePalettes
     });
-    localStorage.setItem('8bitcanvas-autosave', data);
+    localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
   }
 
   undo(state: State): boolean {
@@ -246,11 +251,7 @@ function drawGrid(app: App, state: State): void {
   }
   ctx.stroke();
 
-  const canvasCenter = {
-    x: canvas.width / 2,
-    y: canvas.height / 2
-  };
-  const origin = worldToScreen({ x: 0, y: 0 }, state, canvasCenter);
+  const origin = worldToScreen({ x: 0, y: 0 }, state, center(canvas));
   ctx.strokeStyle = '#666';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -261,14 +262,19 @@ function drawGrid(app: App, state: State): void {
   ctx.stroke();
 }
 
+function center(size:{width:number, height:number}): Point {
+  return {
+    x: size.width / 2,
+    y: size.height / 2
+  }
+
+}
+
 function drawNode(node: CanvasNode, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
-  const canvasCenter = {
-    x: canvas.width / 2,
-    y: canvas.height / 2
-  };
-  const pos = worldToScreen({ x: node.x, y: node.y }, state, canvasCenter);
+
+  const pos = worldToScreen({ x: node.x, y: node.y }, state, center(canvas));
   const w = node.width * state.zoom;
   const h = node.height * state.zoom;
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
@@ -413,10 +419,7 @@ function drawEdge(edge: Edge, context: Context): void {
   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-  const canvasCenter = {
-    x: canvas.width / 2,
-    y: canvas.height / 2
-  };
+  const canvasCenter = center(canvas)
   const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, canvasCenter);
   const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, canvasCenter);
 
@@ -472,8 +475,9 @@ function renderFull(context: Context): void {
 const render = () => renderFull(context);
 
 function findNodeAt(point: Point, context: Context): CanvasNode | null {
-  const { state } = context;
-  const world = screenToWorld(point, context.state, context.app.canvas);
+  const { state, app } = context;
+  const canvasCenter = center(app.canvas);
+  const world = screenToWorld(point, context.state, canvasCenter);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
@@ -493,10 +497,7 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-    const canvasCenter = {
-      x: context.app.canvas.width / 2,
-      y: context.app.canvas.height / 2
-    };
+    const canvasCenter = center(context.app.canvas);
     const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, canvasCenter);
     const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, canvasCenter);
 
@@ -648,7 +649,7 @@ function saveToFile(context: Context): void {
   a.download = 'canvas.json';
   a.click();
   URL.revokeObjectURL(url);
-  localStorage.setItem('8bitcanvas-autosave', data);
+  localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
 }
 
 function loadFromFile(file: File, context: Context): void {
@@ -697,7 +698,7 @@ function loadFromFile(file: File, context: Context): void {
 // function findPaletteIndex(palettes: string[], color: string | undefined): number
 
 function loadFromLocalStorage(state: State): void {
-  const data = localStorage.getItem('8bitcanvas-autosave');
+  const data = localStorage.getItem(STORAGE_KEYS.AUTOSAVE);
   if (data) {
     try {
       const parsed = JSON.parse(data);
@@ -805,9 +806,10 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const node = findNodeAt({ x, y }, context);
+  const canvasCenter = center(canvas);
 
   if (node) {
-    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+    const world = screenToWorld({ x, y }, context.state, canvasCenter);
     const resizeHandleSize = 10;
     const inResizeZone =
       world.x >= node.x + node.width - resizeHandleSize &&
@@ -835,7 +837,7 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
       }
       state.selectedEdge = null;
       state.isDragging = true;
-      state.dragStart = screenToWorld({ x, y }, context.state, context.app.canvas);
+      state.dragStart = screenToWorld({ x, y }, context.state, canvasCenter);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
@@ -865,9 +867,10 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
+  const canvasCenter = center(canvas);
 
   if (state.isResizing && state.resizeNode) {
-    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+    const world = screenToWorld({ x, y }, context.state, canvasCenter);
     const dx = world.x - state.resizeStart!.x;
     const dy = world.y - state.resizeStart!.y;
     const newWidth = Math.max(40, state.resizeStartSize!.width + dx);
@@ -881,7 +884,7 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   if (!state.isDragging) return;
 
   if (state.selectedNode) {
-    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+    const world = screenToWorld({ x, y }, context.state, canvasCenter);
     state.selectedNode.x = world.x - state.dragOffset.x;
     state.selectedNode.y = world.y - state.dragOffset.y;
     render();
@@ -1091,14 +1094,14 @@ function initApp(context: Context): void {
   render();
   updatePropertiesPanel(_state, _app);
 
-  const isDev = localStorage.getItem('8bitcanvas-dev') === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
+  const isDev = localStorage.getItem(STORAGE_KEYS.DEV_MODE) === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
   if (isDev) {
     (app.document.getElementById('btn-clear-storage') as HTMLElement).style.display = 'inline-block';
   }
 
   app.document.getElementById('btn-clear-storage')!.addEventListener('click', () => {
-    localStorage.removeItem('8bitcanvas-autosave');
-    localStorage.removeItem('8bitcanvas-dev');
+    localStorage.removeItem(STORAGE_KEYS.AUTOSAVE);
+    localStorage.removeItem(STORAGE_KEYS.DEV_MODE);
     location.reload();
   });
 }

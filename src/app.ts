@@ -484,7 +484,7 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
     const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
 
-    const dist = pointToLineDistance(point.x, point.y, from.x, from.y, to.x, to.y);
+    const dist = pointToLineDistance(point, from, to);
     if (dist < threshold) {
       return edge;
     }

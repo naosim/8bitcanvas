@@ -113,26 +113,26 @@ export function getRectEdgePoint(node: Figure, toNode: Figure): Point {
   };
 }
 
-export function pointToLineDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const A = px - x1;
-  const B = py - y1;
-  const C = x2 - x1;
-  const D = y2 - y1;
+export function pointToLineDistance(p: Point, lineStart: Point, lineEnd: Point): number {
+  const A = p.x - lineStart.x;
+  const B = p.y - lineStart.y;
+  const C = lineEnd.x - lineStart.x;
+  const D = lineEnd.y - lineStart.y;
   const dot = A * C + B * D;
   const lenSq = C * C + D * D;
   let param = -1;
   if (lenSq !== 0) param = dot / lenSq;
   let xx: number, yy: number;
   if (param < 0) {
-    xx = x1; yy = y1;
+    xx = lineStart.x; yy = lineStart.y;
   } else if (param > 1) {
-    xx = x2; yy = y2;
+    xx = lineEnd.x; yy = lineEnd.y;
   } else {
-    xx = x1 + param * C;
-    yy = y1 + param * D;
+    xx = lineStart.x + param * C;
+    yy = lineStart.y + param * D;
   }
-  const dx = px - xx;
-  const dy = py - yy;
+  const dx = p.x - xx;
+  const dy = p.y - yy;
   return Math.sqrt(dx * dx + dy * dy);
 }
 

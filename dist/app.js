@@ -123,7 +123,8 @@ function resizeCanvas(app) {
     canvas.height = container.offsetHeight;
     render();
 }
-const TEXT_PADDING = 20;
+const HORIZONTAL_PADDING = 18;
+const VERTICAL_PADDING = 32;
 const LINE_HEIGHT = 18;
 function autoResizeNode(node, context) {
     const { app } = context;
@@ -140,8 +141,8 @@ function autoResizeNode(node, context) {
         if (metrics.width > maxWidth)
             maxWidth = metrics.width;
     });
-    node.width = Math.max(minWidth, maxWidth + TEXT_PADDING);
-    node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + TEXT_PADDING);
+    node.width = Math.max(minWidth, maxWidth + HORIZONTAL_PADDING);
+    node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + VERTICAL_PADDING);
 }
 function undo(state) {
     if (state.historyManager.undo(state)) {
@@ -266,21 +267,24 @@ function drawNode(node, context) {
             const valign = node.textValign || 'top';
             ctx.fillStyle = '#ffffff';
             ctx.font = `${14 * state.zoom}px 'DotGothic16'`;
+            const verticalPadding = VERTICAL_PADDING * state.zoom;
+            const verticalPaddingTop = verticalPadding / 2;
+            const verticalPaddingBottom = verticalPadding / 2;
             const totalTextHeight = lines.length * lineHeight;
-            let startY = pos.y + (h - totalTextHeight) / 2 + lineHeight - 4 * state.zoom;
+            let startY = pos.y + verticalPaddingTop;
             if (valign === 'top') {
-                startY = pos.y + 12 * state.zoom;
+                startY = pos.y + verticalPaddingTop;
             }
             else if (valign === 'bottom') {
-                startY = pos.y + h - totalTextHeight + 12 * state.zoom;
+                startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
             }
             lines.forEach((line, i) => {
-                let x = pos.x + 8;
+                let x = pos.x + HORIZONTAL_PADDING / 2;
                 if (align === 'center') {
                     x = pos.x + w / 2;
                 }
                 else if (align === 'right') {
-                    x = pos.x + w - 8;
+                    x = pos.x + w - HORIZONTAL_PADDING / 2;
                 }
                 const y = startY + i * lineHeight;
                 if (align === 'center') {

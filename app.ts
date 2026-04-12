@@ -203,24 +203,25 @@ function resizeCanvas(app: App): void {
   render();
 }
 
-const TEXT_PADDING = 20;
+const HORIZONTAL_PADDING = 18;
+const VERTICAL_PADDING = 32;
 const LINE_HEIGHT = 18;
 
 function autoResizeNode(node: CanvasNode, context: Context): void {
-  const { app } = context;
-  const { ctx } = app;
-  if (!node.text) return;
-  const lines = node.text.split('\n');
-  const minWidth = 80;
-  const minHeight = 40;
-  ctx.font = "14px 'DotGothic16'";
-  let maxWidth = 0;
-  lines.forEach(line => {
-    const metrics = ctx.measureText(line);
-    if (metrics.width > maxWidth) maxWidth = metrics.width;
-  });
-  node.width = Math.max(minWidth, maxWidth + TEXT_PADDING);
-  node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + TEXT_PADDING);
+   const { app } = context;
+   const { ctx } = app;
+   if (!node.text) return;
+   const lines = node.text.split('\n');
+   const minWidth = 80;
+   const minHeight = 40;
+   ctx.font = "14px 'DotGothic16'";
+   let maxWidth = 0;
+   lines.forEach(line => {
+     const metrics = ctx.measureText(line);
+     if (metrics.width > maxWidth) maxWidth = metrics.width;
+   });
+   node.width = Math.max(minWidth, maxWidth + HORIZONTAL_PADDING);
+   node.height = Math.max(minHeight, lines.length * LINE_HEIGHT + VERTICAL_PADDING);
 }
 
 function undo(state: State): void {
@@ -356,23 +357,27 @@ function drawNode(node: CanvasNode, context: Context): void {
       ctx.fillStyle = '#ffffff';
       ctx.font = `${14 * state.zoom}px 'DotGothic16'`;
 
-      const totalTextHeight = lines.length * lineHeight;
-      let startY = pos.y + (h - totalTextHeight) / 2 + lineHeight - 4 * state.zoom;
+       const verticalPadding = VERTICAL_PADDING * state.zoom;
+       const verticalPaddingTop = verticalPadding / 2;
+       const verticalPaddingBottom = verticalPadding / 2;
+       
+       const totalTextHeight = lines.length * lineHeight;
+       let startY = pos.y + verticalPaddingTop;
 
-      if (valign === 'top') {
-        startY = pos.y + 12 * state.zoom;
-      } else if (valign === 'bottom') {
-        startY = pos.y + h - totalTextHeight + 12 * state.zoom;
-      }
+       if (valign === 'top') {
+         startY = pos.y + verticalPaddingTop;
+       } else if (valign === 'bottom') {
+         startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
+       }
 
-      lines.forEach((line, i) => {
-        let x = pos.x + 8;
-        if (align === 'center') {
-          x = pos.x + w / 2;
-        } else if (align === 'right') {
-          x = pos.x + w - 8;
-        }
-        const y = startY + i * lineHeight;
+       lines.forEach((line, i) => {
+         let x = pos.x + HORIZONTAL_PADDING / 2;
+         if (align === 'center') {
+           x = pos.x + w / 2;
+         } else if (align === 'right') {
+           x = pos.x + w - HORIZONTAL_PADDING / 2;
+         }
+         const y = startY + i * lineHeight;
 
         if (align === 'center') {
           ctx.textAlign = 'center';

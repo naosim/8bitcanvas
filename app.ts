@@ -1,15 +1,15 @@
 
 
-import { 
-  Point, 
-  Figure, 
-  rgbaToHex, 
-  hexToRgba, 
-  resizeCanvas, 
-  screenToWorld, 
-  worldToScreen, 
-  getRectEdgePoint, 
-  pointToLineDistance, 
+import {
+  Point,
+  Figure,
+  rgbaToHex,
+  hexToRgba,
+  resizeCanvas,
+  screenToWorld,
+  worldToScreen,
+  getRectEdgePoint,
+  pointToLineDistance,
   findPaletteIndex,
   calcTextRectSize
 } from './util';
@@ -202,7 +202,7 @@ function autoResizeNode(node: CanvasNode, context: Context): void {
   const { app } = context;
   const { ctx } = app;
   if (!node.text) return;
-  const {width, height} = calcTextRectSize(node.text, "14px 'DotGothic16'", LINE_HEIGHT, ctx);
+  const { width, height } = calcTextRectSize(node.text, "14px 'DotGothic16'", LINE_HEIGHT, ctx);
 
   const minWidth = 80;
   const minHeight = 40;
@@ -330,27 +330,27 @@ function drawNode(node: CanvasNode, context: Context): void {
       ctx.fillStyle = '#ffffff';
       ctx.font = `${14 * state.zoom}px 'DotGothic16'`;
 
-       const verticalPadding = VERTICAL_PADDING * state.zoom;
-       const verticalPaddingTop = verticalPadding / 2;
-       const verticalPaddingBottom = verticalPadding / 2;
-       
-       const totalTextHeight = lines.length * lineHeight;
-       let startY = pos.y + verticalPaddingTop;
+      const verticalPadding = VERTICAL_PADDING * state.zoom;
+      const verticalPaddingTop = verticalPadding / 2;
+      const verticalPaddingBottom = verticalPadding / 2;
 
-       if (valign === 'top') {
-         startY = pos.y + verticalPaddingTop;
-       } else if (valign === 'bottom') {
-         startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
-       }
+      const totalTextHeight = lines.length * lineHeight;
+      let startY = pos.y + verticalPaddingTop;
 
-       lines.forEach((line, i) => {
-         let x = pos.x + HORIZONTAL_PADDING / 2;
-         if (align === 'center') {
-           x = pos.x + w / 2;
-         } else if (align === 'right') {
-           x = pos.x + w - HORIZONTAL_PADDING / 2;
-         }
-         const y = startY + i * lineHeight;
+      if (valign === 'top') {
+        startY = pos.y + verticalPaddingTop;
+      } else if (valign === 'bottom') {
+        startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
+      }
+
+      lines.forEach((line, i) => {
+        let x = pos.x + HORIZONTAL_PADDING / 2;
+        if (align === 'center') {
+          x = pos.x + w / 2;
+        } else if (align === 'right') {
+          x = pos.x + w - HORIZONTAL_PADDING / 2;
+        }
+        const y = startY + i * lineHeight;
 
         if (align === 'center') {
           ctx.textAlign = 'center';
@@ -402,11 +402,11 @@ function drawEdge(edge: Edge, context: Context): void {
     y: toNode.y + toNode.height / 2
   };
 
-   const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
-   const toEdgePoint = getRectEdgePoint(toNode, fromNode);
+  const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
+  const toEdgePoint = getRectEdgePoint(toNode, fromNode);
 
-   const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, context.app.canvas);
-   const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, context.app.canvas);
+  const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context.state, context.app.canvas);
+  const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context.state, context.app.canvas);
 
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
@@ -451,7 +451,7 @@ function renderFull(context: Context): void {
   const { ctx, canvas } = app;
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-   drawGrid(context.app, context.state);
+  drawGrid(context.app, context.state);
 
   state.nodes.forEach(node => drawNode(node, context));
   state.edges.forEach(edge => drawEdge(edge, context));
@@ -461,11 +461,11 @@ const render = () => renderFull(context);
 
 function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const { state } = context;
-   const world = screenToWorld(point, context.state, context.app.canvas);
+  const world = screenToWorld(point, context.state, context.app.canvas);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
     if (world.x >= node.x && world.x <= node.x + node.width &&
-        world.y >= node.y && world.y <= node.y + node.height) {
+      world.y >= node.y && world.y <= node.y + node.height) {
       return node;
     }
   }
@@ -481,8 +481,8 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
     const toNode = state.nodes.find(n => n.id === edge.toNode);
     if (!fromNode || !toNode) continue;
 
-     const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
-     const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
+    const from = worldToScreen({ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, context.state, context.app.canvas);
+    const to = worldToScreen({ x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }, context.state, context.app.canvas);
 
     const dist = pointToLineDistance(point.x, point.y, from.x, from.y, to.x, to.y);
     if (dist < threshold) {
@@ -690,7 +690,7 @@ function loadFromLocalStorage(state: State): void {
       if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
       if (parsed.strokePalettes) state.strokePalettes = parsed.strokePalettes;
       state.historyManager.save(state);
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -788,10 +788,10 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-   const node = findNodeAt({ x, y }, context);
+  const node = findNodeAt({ x, y }, context);
 
-   if (node) {
-     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+  if (node) {
+    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
     const resizeHandleSize = 10;
     const inResizeZone =
       world.x >= node.x + node.width - resizeHandleSize &&
@@ -818,8 +818,8 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
         state.selectedNode = node;
       }
       state.selectedEdge = null;
-       state.isDragging = true;
-       state.dragStart = screenToWorld({ x, y }, context.state, context.app.canvas);
+      state.isDragging = true;
+      state.dragStart = screenToWorld({ x, y }, context.state, context.app.canvas);
       state.dragOffset = {
         x: state.dragStart.x - node.x,
         y: state.dragStart.y - node.y
@@ -850,9 +850,9 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-   if (state.isResizing && state.resizeNode) {
-     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
-     const dx = world.x - state.resizeStart!.x;
+  if (state.isResizing && state.resizeNode) {
+    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+    const dx = world.x - state.resizeStart!.x;
     const dy = world.y - state.resizeStart!.y;
     const newWidth = Math.max(40, state.resizeStartSize!.width + dx);
     const newHeight = Math.max(30, state.resizeStartSize!.height + dy);
@@ -864,10 +864,10 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
 
   if (!state.isDragging) return;
 
-   if (state.selectedNode) {
-     const world = screenToWorld({ x, y }, context.state, context.app.canvas);
-     state.selectedNode.x = world.x - state.dragOffset.x;
-     state.selectedNode.y = world.y - state.dragOffset.y;
+  if (state.selectedNode) {
+    const world = screenToWorld({ x, y }, context.state, context.app.canvas);
+    state.selectedNode.x = world.x - state.dragOffset.x;
+    state.selectedNode.y = world.y - state.dragOffset.y;
     render();
   } else {
     state.offset.x += e.clientX - state.dragStart.x;

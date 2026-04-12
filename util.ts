@@ -29,7 +29,7 @@ export function hexToRgba(hex: string, alpha: number = 1): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function resizeCanvas(app: {document: Document, canvas: HTMLCanvasElement}): void {
+export function resizeCanvas(app: { document: Document, canvas: HTMLCanvasElement }): void {
   const { canvas } = app;
   const container = app.document.getElementById('canvas-container') as HTMLElement;
   canvas.width = container.offsetWidth;
@@ -52,7 +52,7 @@ export function calcTextRectSize(text: string, font: string, lineHeight: number,
   };
 }
 
-export function screenToWorld(point: Point, state: {offset:Point, zoom:number}, canvas: HTMLCanvasElement): Point {
+export function screenToWorld(point: Point, state: { offset: Point, zoom: number }, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {
@@ -61,7 +61,7 @@ export function screenToWorld(point: Point, state: {offset:Point, zoom:number}, 
   };
 }
 
-export function worldToScreen(point: Point, state: {offset:Point, zoom:number}, canvas: HTMLCanvasElement): Point {
+export function worldToScreen(point: Point, state: { offset: Point, zoom: number }, canvas: HTMLCanvasElement): Point {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   return {

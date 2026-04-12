@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-  // util.ts
+  // src/util.ts
   function hexToRgba(hex, alpha = 1) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -117,7 +117,7 @@
     return idx >= 0 ? idx : 0;
   }
 
-  // app.ts
+  // src/app.ts
   var _app = {
     document,
     canvas: document.getElementById("canvas"),

@@ -226,7 +226,7 @@
   };
   var context = { state: _state, app: _app };
   var HORIZONTAL_PADDING = 18;
-  var VERTICAL_PADDING = 32;
+  var VERTICAL_PADDING = 16;
   var LINE_HEIGHT = 18;
   function resizeCanvasWithRender(app) {
     resizeCanvas(app);
@@ -352,12 +352,17 @@
         const verticalPaddingTop = verticalPadding / 2;
         const verticalPaddingBottom = verticalPadding / 2;
         const totalTextHeight = lines.length * lineHeight;
-        let startY = pos.y + verticalPaddingTop;
+        const fontSize = 14 * state.zoom;
+        const baselineOffset = fontSize * 0.75;
+        let textY = 0;
         if (valign === "top") {
-          startY = pos.y + verticalPaddingTop;
+          textY = baselineOffset + verticalPaddingTop;
+        } else if (valign === "middle") {
+          textY = (h - totalTextHeight) / 2 + baselineOffset;
         } else if (valign === "bottom") {
-          startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
+          textY = h - totalTextHeight + baselineOffset;
         }
+        const startY = pos.y + textY;
         lines.forEach((line, i) => {
           let x = pos.x + HORIZONTAL_PADDING / 2;
           if (align === "center") {

@@ -23,7 +23,7 @@ interface CanvasNode extends Figure {
   id: string;
   text?: string;
   textAlign?: 'left' | 'center' | 'right';
-  textValign?: 'top' | 'center' | 'bottom';
+  textValign?: 'top' | 'middle' | 'bottom';
   bgPaletteIndex: number;
   bgTransparent: boolean;
   strokePaletteIndex: number;
@@ -195,7 +195,7 @@ const context: Context = { state: _state, app: _app };
 
 
 const HORIZONTAL_PADDING = 18;
-const VERTICAL_PADDING = 32;
+const VERTICAL_PADDING = 16;
 const LINE_HEIGHT = 18;
 
 function resizeCanvasWithRender(app: App) {
@@ -341,13 +341,19 @@ function drawNode(node: CanvasNode, context: Context): void {
       const verticalPaddingBottom = verticalPadding / 2;
 
       const totalTextHeight = lines.length * lineHeight;
-      let startY = pos.y + verticalPaddingTop;
 
+      const fontSize = 14 * state.zoom;
+      const baselineOffset = fontSize * 0.75;
+
+      let textY = 0;
       if (valign === 'top') {
-        startY = pos.y + verticalPaddingTop;
+        textY = baselineOffset + verticalPaddingTop;
+      } else if (valign === 'middle') {
+        textY = (h - totalTextHeight) / 2 + baselineOffset;
       } else if (valign === 'bottom') {
-        startY = pos.y + h - totalTextHeight - verticalPaddingBottom;
+        textY = h - totalTextHeight + baselineOffset;
       }
+      const startY = pos.y + textY;
 
       lines.forEach((line, i) => {
         let x = pos.x + HORIZONTAL_PADDING / 2;
@@ -1056,7 +1062,7 @@ function initApp(context: Context): void {
 
   app.document.getElementById('prop-text-valign')!.addEventListener('change', (e) => {
     if (context.state.selectedNode) {
-      context.state.selectedNode.textValign = (e.target as HTMLSelectElement).value as 'top' | 'center' | 'bottom';
+      context.state.selectedNode.textValign = (e.target as HTMLSelectElement).value as 'top' | 'middle' | 'bottom';
       render();
       context.state.historyManager.save(context.state);
     }

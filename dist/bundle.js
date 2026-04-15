@@ -287,7 +287,7 @@
     const h = node.height * state.zoom;
     const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
     if (pos.x + w < 0 || pos.x > canvas.width || pos.y + h < 0 || pos.y > canvas.height) {
-      if (app.canvas.width < 5e3) return;
+      return;
     }
     if (node.type === "text") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#4444aa";

@@ -272,7 +272,7 @@ function drawNode(node: CanvasNode, context: Context): void {
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
 
   if (pos.x + w < 0 || pos.x > canvas.width || pos.y + h < 0 || pos.y > canvas.height) {
-    if (app.canvas.width < 5000) return;
+    return;
   }
 
   if (node.type === 'text') {

@@ -272,7 +272,7 @@ function drawNode(node: CanvasNode, context: Context): void {
   const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
 
   if (pos.x + w < 0 || pos.x > canvas.width || pos.y + h < 0 || pos.y > canvas.height) {
-    return;
+    if (app.canvas.width < 5000) return;
   }
 
   if (node.type === 'text') {
@@ -647,6 +647,79 @@ function saveToFile(context: Context): void {
   localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
 }
 
+function exportToPng(context: Context): void {
+  const { state, app } = context;
+
+  if (state.nodes.length === 0) return;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  state.nodes.forEach(node => {
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.width);
+    maxY = Math.max(maxY, node.y + node.height);
+  });
+
+  const padding = 50;
+  const width = Math.ceil(maxX - minX + padding * 2);
+  const height = Math.ceil(maxY - minY + padding * 2);
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext('2d')!;
+
+  tempCtx.fillStyle = '#1a1a1a';
+  tempCtx.fillRect(0, 0, width, height);
+
+  const tempApp: App = {
+    document: app.document,
+    canvas: tempCanvas,
+    ctx: tempCtx,
+    fileInput: app.fileInput
+  };
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  const tempState: State = {
+    nodes: state.nodes,
+    edges: state.edges,
+    selectedNode: null,
+    selectedNodes: [],
+    selectedEdge: null,
+    mode: state.mode,
+    zoom: 1,
+    offset: { x: -minX + padding - width / 2, y: -minY + padding - height / 2 },
+    isDragging: false,
+    isResizing: false,
+    dragStart: { x: 0, y: 0 },
+    resizeNode: null,
+    resizeStart: null,
+    resizeStartSize: null,
+    dragOffset: { x: 0, y: 0 },
+    historyManager: state.historyManager,
+    colorPalettes: state.colorPalettes,
+    strokePalettes: state.strokePalettes,
+    selectedPaletteIndex: 0,
+    editingPaletteIndex: undefined,
+    editingPaletteType: undefined
+  };
+
+  tempState.nodes.forEach(n => {
+    drawNode(n, { state: tempState, app: tempApp });
+  });
+  tempState.edges.forEach(e => {
+    drawEdge(e, { state: tempState, app: tempApp });
+  });
+
+  const dataUrl = tempCanvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = 'canvas.png';
+  a.click();
+}
+
 function loadFromFile(file: File, context: Context): void {
   const { state, app } = context;
   const { ctx, canvas } = app;
@@ -988,6 +1061,9 @@ function initApp(context: Context): void {
   app.document.getElementById('btn-log')!.addEventListener('click', () => {
     const data = exportToObsidianCanvas(context.state);
     console.log(data);
+  });
+  app.document.getElementById('btn-export-png')!.addEventListener('click', () => {
+    exportToPng(context);
   });
   fileInput.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;

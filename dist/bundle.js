@@ -897,8 +897,7 @@
             }
             state.selectedNode = null;
           } else {
-            if (state.selectedNodes.length > 0 && state.selectedNodes.includes(node)) {
-            } else if (state.selectedNode && state.selectedNode !== node) {
+            if (state.selectedNode && state.selectedNode !== node) {
               state.lastSelectedNode = state.selectedNode;
             } else if (!state.lastSelectedNode) {
               state.lastSelectedNode = node;
@@ -907,19 +906,12 @@
             state.selectedNode = node;
           }
           state.selectedEdge = null;
-          if (!e.shiftKey) {
-            state.isDragging = true;
-            state.dragStart = { x: e.clientX, y: e.clientY };
-            if (state.selectedNodes.length > 0) {
-              const nodePos = screenToWorld({ x, y }, context2.state, canvas);
-              state.dragOffset = nodePos;
-            } else {
-              state.dragOffset = {
-                x: world.x - node.x,
-                y: world.y - node.y
-              };
-            }
-          }
+          state.isDragging = true;
+          state.dragStart = { x: e.clientX, y: e.clientY };
+          state.dragOffset = {
+            x: world.x - node.x,
+            y: world.y - node.y
+          };
         }
       }
     } else {
@@ -961,17 +953,6 @@
       const world = screenToWorld({ x, y }, context2.state, canvas);
       state.selectedNode.x = world.x - state.dragOffset.x;
       state.selectedNode.y = world.y - state.dragOffset.y;
-      render();
-    } else if (state.selectedNodes.length > 0) {
-      const world = screenToWorld({ x, y }, context2.state, canvas);
-      const startWorld = { x: world.x - state.dragOffset.x, y: world.y - state.dragOffset.y };
-      const moveX = world.x - startWorld.x;
-      const moveY = world.y - startWorld.y;
-      state.selectedNodes.forEach((node) => {
-        node.x += moveX;
-        node.y += moveY;
-      });
-      state.dragOffset = { x: world.x, y: world.y };
       render();
     } else {
       state.offset.x += e.clientX - state.dragStart.x;

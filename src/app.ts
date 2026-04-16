@@ -947,7 +947,7 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
           }
           state.selectedNode = null;
         } else {
-          if (state.selectedNodes.length > 0) {
+          if (state.selectedNodes.length > 0 && state.selectedNodes.includes(node)) {
           } else if (state.selectedNode && state.selectedNode !== node) {
             state.lastSelectedNode = state.selectedNode;
           } else if (!state.lastSelectedNode) {
@@ -957,16 +957,19 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
           state.selectedNode = node;
         }
         state.selectedEdge = null;
-      }
-      state.isDragging = true;
-      state.dragStart = screenToWorld({ x, y }, context.state, canvas);
-      if (state.selectedNodes.length > 0) {
-        state.dragOffset = screenToWorld({ x, y }, context.state, canvas);
-      } else {
-        state.dragOffset = {
-          x: state.dragStart.x - node.x,
-          y: state.dragStart.y - node.y
-        };
+        if (!e.shiftKey) {
+          state.isDragging = true;
+          state.dragStart = { x: e.clientX, y: e.clientY };
+          if (state.selectedNodes.length > 0) {
+            const nodePos = screenToWorld({ x, y }, context.state, canvas);
+            state.dragOffset = nodePos;
+          } else {
+            state.dragOffset = {
+              x: world.x - node.x,
+              y: world.y - node.y
+            };
+          }
+        }
       }
     }
   } else {
@@ -1015,16 +1018,14 @@ function handleMouseMove(e: MouseEvent, context: Context): void {
     render();
   } else if (state.selectedNodes.length > 0) {
     const world = screenToWorld({ x, y }, context.state, canvas);
-    const dx = world.x - state.dragOffset.x;
-    const dy = world.y - state.dragOffset.y;
-    const startWorld = screenToWorld({ x: state.dragStart.x, y: state.dragStart.y }, context.state, canvas);
+    const startWorld = { x: world.x - state.dragOffset.x, y: world.y - state.dragOffset.y };
     const moveX = world.x - startWorld.x;
     const moveY = world.y - startWorld.y;
     state.selectedNodes.forEach(node => {
       node.x += moveX;
       node.y += moveY;
     });
-    state.dragStart = { x, y };
+    state.dragOffset = { x: world.x, y: world.y };
     render();
   } else {
     state.offset.x += e.clientX - state.dragStart.x;

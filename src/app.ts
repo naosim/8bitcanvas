@@ -26,7 +26,6 @@ interface CanvasNode extends Figure {
   textValign?: 'top' | 'middle' | 'bottom';
   bgPaletteIndex: number;
   bgTransparent: boolean;
-  strokePaletteIndex: number;
   strokeTransparent: boolean;
   autoResize: boolean;
 }
@@ -60,7 +59,6 @@ interface State {
   dragOffset: Point;
   historyManager: HistoryManager;
   colorPalettes: string[];
-  strokePalettes: string[];
   selectedPaletteIndex: number;
   editingPaletteIndex: number | undefined;
   editingPaletteType: string | undefined;
@@ -104,8 +102,7 @@ class HistoryManager {
     this.history.push(JSON.stringify({
       nodes: state.nodes,
       edges: state.edges,
-      colorPalettes: state.colorPalettes,
-      strokePalettes: state.strokePalettes
+      colorPalettes: state.colorPalettes
     }));
     this.historyIndex++;
     if (this.history.length > this.maxSize) {
@@ -115,8 +112,7 @@ class HistoryManager {
     const data = JSON.stringify({
       nodes: state.nodes,
       edges: state.edges,
-      colorPalettes: state.colorPalettes,
-      strokePalettes: state.strokePalettes
+      colorPalettes: state.colorPalettes
     });
     localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
   }
@@ -144,7 +140,6 @@ class HistoryManager {
     state.nodes = data.nodes;
     state.edges = data.edges;
     if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-    if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
     state.selectedNode = null;
     state.selectedEdge = null;
   }
@@ -177,11 +172,6 @@ const _state: State = {
   dragOffset: { x: 0, y: 0 },
   historyManager: new HistoryManager(50),
   colorPalettes: [
-    '#000000', '#888888', '#ffffff',
-    '#ff0000', '#00ff00', '#0000ff',
-    '#ffff00', '#00ffff'
-  ],
-  strokePalettes: [
     '#000000', '#888888', '#ffffff',
     '#ff0000', '#00ff00', '#0000ff',
     '#ffff00', '#00ffff'
@@ -279,7 +269,6 @@ function drawNode(node: CanvasNode, context: Context): void {
 
   if (node.type === 'text') {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#4444aa';
-    const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
     const bgTransparent = node.bgTransparent;
     const strokeTransparent = node.strokeTransparent;
     const r = 4 * state.zoom;
@@ -314,7 +303,7 @@ function drawNode(node: CanvasNode, context: Context): void {
       ctx.closePath();
       ctx.stroke();
     } else if (!strokeTransparent) {
-      ctx.strokeStyle = strokeHex;
+      ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = getStrokeWidth(state.zoom);
       ctx.beginPath();
       ctx.moveTo(pos.x + r, pos.y);
@@ -381,22 +370,18 @@ function drawNode(node: CanvasNode, context: Context): void {
     }
   } else if (node.type === 'circle') {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#44aa44';
-    const strokeHex = state.strokePalettes[node.strokePaletteIndex] || '#ffffff';
     const bgTransparent = node.bgTransparent;
-    const strokeTransparent = node.strokeTransparent;
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
       ctx.beginPath();
       ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (!strokeTransparent) {
-      ctx.strokeStyle = isSelected ? '#ffff00' : strokeHex;
-      ctx.lineWidth = getStrokeWidth(state.zoom);
-      ctx.beginPath();
-      ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.strokeStyle = isSelected ? '#ffff00' : '#ffffff';
+    ctx.lineWidth = getStrokeWidth(state.zoom);
+    ctx.beginPath();
+    ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
@@ -523,7 +508,6 @@ function addTextNode(state: State, x?: number, y?: number): void {
     textValign: 'top',
     bgPaletteIndex: 1,
     bgTransparent: false,
-    strokePaletteIndex: 2,
     strokeTransparent: false,
     autoResize: true
   };
@@ -546,7 +530,6 @@ function addCircleNode(state: State): void {
     height: 14,
     bgPaletteIndex: 4,
     bgTransparent: false,
-    strokePaletteIndex: 2,
     strokeTransparent: false,
     autoResize: true
   };
@@ -580,7 +563,6 @@ function addCircleAtEdge(state: State): void {
     height: 14,
     bgPaletteIndex: 4,
     bgTransparent: false,
-    strokePaletteIndex: 2,
     strokeTransparent: false,
     autoResize: true
   };
@@ -683,7 +665,7 @@ function exportToObsidianCanvas(state: State): string {
       height: n.height,
       text: n.text || '',
       bg: state.colorPalettes[n.bgPaletteIndex] || '#000000',
-      color: state.strokePalettes[n.strokePaletteIndex] || '#ffffff',
+      color: '#ffffff',
       textAlign: n.textAlign,
       textValign: n.textValign
     })),
@@ -697,7 +679,6 @@ function exportToObsidianCanvas(state: State): string {
       arrowEnd: e.arrowEnd || false
     })),
     colorPalettes: state.colorPalettes,
-    strokePalettes: state.strokePalettes,
     viewport: {
       x: -state.offset.x / state.zoom,
       y: -state.offset.y / state.zoom,
@@ -774,7 +755,6 @@ function exportToPng(context: Context): void {
     dragOffset: { x: 0, y: 0 },
     historyManager: state.historyManager,
     colorPalettes: state.colorPalettes,
-    strokePalettes: state.strokePalettes,
     selectedPaletteIndex: 0,
     editingPaletteIndex: undefined,
     editingPaletteType: undefined
@@ -807,21 +787,17 @@ function loadFromFile(file: File, context: Context): void {
           if (n.width <= 20 && n.height <= 20) {
             node.type = 'circle';
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-            node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
           } else {
             node.type = n.type || 'text';
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-            node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
           }
           node.bgTransparent = n.bgTransparent || false;
-          node.strokeTransparent = n.strokeTransparent || false;
           node.autoResize = n.autoResize !== undefined ? n.autoResize : true;
           return node;
         });
       }
       if (data.edges) state.edges = data.edges;
       if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-      if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
       if (data.viewport) {
         state.zoom = data.viewport.zoom || 1;
         state.offset.x = -data.viewport.x * state.zoom;
@@ -847,7 +823,6 @@ function loadFromLocalStorage(state: State): void {
       if (parsed.nodes) state.nodes = parsed.nodes;
       if (parsed.edges) state.edges = parsed.edges;
       if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
-      if (parsed.strokePalettes) state.strokePalettes = parsed.strokePalettes;
       state.historyManager.save(state);
     } catch (e) { }
   }
@@ -1092,10 +1067,8 @@ function updatePropertiesPanel(state: State, app: App): void {
   const nodeProps = document.getElementById('node-props') as HTMLElement;
   const edgeProps = document.getElementById('edge-props') as HTMLElement;
   const bgTransparentOpt = document.querySelector('.transparent-option') as HTMLElement;
-  const strokeTransparentOpt = document.querySelectorAll('.transparent-option')[1] as HTMLElement;
 
   updatePaletteDisplay('bg-palette', context);
-  updatePaletteDisplay('stroke-palette', context);
 
   if (state.selectedNode) {
     nodeProps.style.display = 'flex';
@@ -1109,7 +1082,6 @@ function updatePropertiesPanel(state: State, app: App): void {
 
     const isText = state.selectedNode.type === 'text';
     bgTransparentOpt.style.display = isText ? 'inline' : 'none';
-    strokeTransparentOpt.style.display = isText ? 'inline' : 'none';
   } else if (state.selectedEdge) {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'flex';
@@ -1124,9 +1096,15 @@ function updatePaletteDisplay(containerId: string, context: Context): void {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
-  const palettes = containerId === 'stroke-palette' ? state.strokePalettes : state.colorPalettes;
-  const selectedIdx = containerId === 'stroke-palette' ? state.selectedNode?.strokePaletteIndex : state.selectedNode?.bgPaletteIndex;
-  const propName = containerId === 'stroke-palette' ? 'strokePaletteIndex' : 'bgPaletteIndex';
+  let palettes = state.colorPalettes;
+  let selectedIdx = state.selectedNode?.bgPaletteIndex;
+  if (state.selectedNode?.type === 'circle') {
+    palettes = state.colorPalettes.slice(0, 3);
+    if (selectedIdx !== undefined && selectedIdx >= 3) {
+      selectedIdx = 0;
+      state.selectedNode.bgPaletteIndex = 0;
+    }
+  }
   palettes.forEach((color, idx) => {
     const swatch = document.createElement('div');
     swatch.className = 'palette-swatch';
@@ -1136,10 +1114,13 @@ function updatePaletteDisplay(containerId: string, context: Context): void {
     }
     swatch.addEventListener('click', () => {
       if (state.selectedNode) {
-        (state.selectedNode as any)[propName] = idx;
+        if (state.selectedNode.type === 'circle') {
+          state.selectedNode.bgPaletteIndex = idx;
+        } else {
+          state.selectedNode.bgPaletteIndex = idx;
+        }
         render();
         updatePaletteDisplay('bg-palette', context);
-        updatePaletteDisplay('stroke-palette', context);
         state.historyManager.save(state);
       }
     });
@@ -1267,11 +1248,9 @@ function initApp(context: Context): void {
 
   app.document.getElementById('palette-color-picker')!.addEventListener('input', (e) => {
     if (context.state.editingPaletteIndex !== undefined) {
-      const palettes = context.state.editingPaletteType === 'stroke-palette' ? context.state.strokePalettes : context.state.colorPalettes;
-      palettes[context.state.editingPaletteIndex] = hexToRgba((e.target as HTMLInputElement).value);
+      context.state.colorPalettes[context.state.editingPaletteIndex] = hexToRgba((e.target as HTMLInputElement).value);
       if (context.state.selectedNode) {
         updatePaletteDisplay('bg-palette', context);
-        updatePaletteDisplay('stroke-palette', context);
       }
       render();
       context.state.historyManager.save(context.state);

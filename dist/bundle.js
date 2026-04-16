@@ -135,8 +135,7 @@
       this.history.push(JSON.stringify({
         nodes: state.nodes,
         edges: state.edges,
-        colorPalettes: state.colorPalettes,
-        strokePalettes: state.strokePalettes
+        colorPalettes: state.colorPalettes
       }));
       this.historyIndex++;
       if (this.history.length > this.maxSize) {
@@ -146,8 +145,7 @@
       const data = JSON.stringify({
         nodes: state.nodes,
         edges: state.edges,
-        colorPalettes: state.colorPalettes,
-        strokePalettes: state.strokePalettes
+        colorPalettes: state.colorPalettes
       });
       localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
     }
@@ -172,7 +170,6 @@
       state.nodes = data.nodes;
       state.edges = data.edges;
       if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-      if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
       state.selectedNode = null;
       state.selectedEdge = null;
     }
@@ -202,16 +199,6 @@
     dragOffset: { x: 0, y: 0 },
     historyManager: new HistoryManager(50),
     colorPalettes: [
-      "#000000",
-      "#888888",
-      "#ffffff",
-      "#ff0000",
-      "#00ff00",
-      "#0000ff",
-      "#ffff00",
-      "#00ffff"
-    ],
-    strokePalettes: [
       "#000000",
       "#888888",
       "#ffffff",
@@ -292,7 +279,6 @@
     }
     if (node.type === "text") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#4444aa";
-      const strokeHex = state.strokePalettes[node.strokePaletteIndex] || "#ffffff";
       const bgTransparent = node.bgTransparent;
       const strokeTransparent = node.strokeTransparent;
       const r = 4 * state.zoom;
@@ -327,7 +313,7 @@
         ctx.closePath();
         ctx.stroke();
       } else if (!strokeTransparent) {
-        ctx.strokeStyle = strokeHex;
+        ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = getStrokeWidth(state.zoom);
         ctx.beginPath();
         ctx.moveTo(pos.x + r, pos.y);
@@ -387,22 +373,18 @@
       }
     } else if (node.type === "circle") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#44aa44";
-      const strokeHex = state.strokePalettes[node.strokePaletteIndex] || "#ffffff";
       const bgTransparent = node.bgTransparent;
-      const strokeTransparent = node.strokeTransparent;
       if (!bgTransparent) {
         ctx.fillStyle = bgHex;
         ctx.beginPath();
         ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (!strokeTransparent) {
-        ctx.strokeStyle = isSelected ? "#ffff00" : strokeHex;
-        ctx.lineWidth = getStrokeWidth(state.zoom);
-        ctx.beginPath();
-        ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+      ctx.strokeStyle = isSelected ? "#ffff00" : "#ffffff";
+      ctx.lineWidth = getStrokeWidth(state.zoom);
+      ctx.beginPath();
+      ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
   function drawEdge(edge, context2) {
@@ -505,7 +487,6 @@
       textValign: "top",
       bgPaletteIndex: 1,
       bgTransparent: false,
-      strokePaletteIndex: 2,
       strokeTransparent: false,
       autoResize: true
     };
@@ -527,7 +508,6 @@
       height: 14,
       bgPaletteIndex: 4,
       bgTransparent: false,
-      strokePaletteIndex: 2,
       strokeTransparent: false,
       autoResize: true
     };
@@ -558,7 +538,6 @@
       height: 14,
       bgPaletteIndex: 4,
       bgTransparent: false,
-      strokePaletteIndex: 2,
       strokeTransparent: false,
       autoResize: true
     };
@@ -652,7 +631,7 @@
         height: n.height,
         text: n.text || "",
         bg: state.colorPalettes[n.bgPaletteIndex] || "#000000",
-        color: state.strokePalettes[n.strokePaletteIndex] || "#ffffff",
+        color: "#ffffff",
         textAlign: n.textAlign,
         textValign: n.textValign
       })),
@@ -666,7 +645,6 @@
         arrowEnd: e.arrowEnd || false
       })),
       colorPalettes: state.colorPalettes,
-      strokePalettes: state.strokePalettes,
       viewport: {
         x: -state.offset.x / state.zoom,
         y: -state.offset.y / state.zoom,
@@ -733,7 +711,6 @@
       dragOffset: { x: 0, y: 0 },
       historyManager: state.historyManager,
       colorPalettes: state.colorPalettes,
-      strokePalettes: state.strokePalettes,
       selectedPaletteIndex: 0,
       editingPaletteIndex: void 0,
       editingPaletteType: void 0
@@ -763,21 +740,17 @@
             if (n.width <= 20 && n.height <= 20) {
               node.type = "circle";
               node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-              node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
             } else {
               node.type = n.type || "text";
               node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-              node.strokePaletteIndex = findPaletteIndex(state.strokePalettes, n.color);
             }
             node.bgTransparent = n.bgTransparent || false;
-            node.strokeTransparent = n.strokeTransparent || false;
             node.autoResize = n.autoResize !== void 0 ? n.autoResize : true;
             return node;
           });
         }
         if (data.edges) state.edges = data.edges;
         if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-        if (data.strokePalettes) state.strokePalettes = data.strokePalettes;
         if (data.viewport) {
           state.zoom = data.viewport.zoom || 1;
           state.offset.x = -data.viewport.x * state.zoom;
@@ -799,7 +772,6 @@
         if (parsed.nodes) state.nodes = parsed.nodes;
         if (parsed.edges) state.edges = parsed.edges;
         if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
-        if (parsed.strokePalettes) state.strokePalettes = parsed.strokePalettes;
         state.historyManager.save(state);
       } catch (e) {
       }
@@ -1030,9 +1002,7 @@
     const nodeProps = document2.getElementById("node-props");
     const edgeProps = document2.getElementById("edge-props");
     const bgTransparentOpt = document2.querySelector(".transparent-option");
-    const strokeTransparentOpt = document2.querySelectorAll(".transparent-option")[1];
     updatePaletteDisplay("bg-palette", context);
-    updatePaletteDisplay("stroke-palette", context);
     if (state.selectedNode) {
       nodeProps.style.display = "flex";
       edgeProps.style.display = "none";
@@ -1044,7 +1014,6 @@
       document2.getElementById("prop-auto-resize").checked = state.selectedNode.autoResize !== false;
       const isText = state.selectedNode.type === "text";
       bgTransparentOpt.style.display = isText ? "inline" : "none";
-      strokeTransparentOpt.style.display = isText ? "inline" : "none";
     } else if (state.selectedEdge) {
       nodeProps.style.display = "none";
       edgeProps.style.display = "flex";
@@ -1058,9 +1027,15 @@
     const container = document2.getElementById(containerId);
     if (!container) return;
     container.innerHTML = "";
-    const palettes = containerId === "stroke-palette" ? state.strokePalettes : state.colorPalettes;
-    const selectedIdx = containerId === "stroke-palette" ? state.selectedNode?.strokePaletteIndex : state.selectedNode?.bgPaletteIndex;
-    const propName = containerId === "stroke-palette" ? "strokePaletteIndex" : "bgPaletteIndex";
+    let palettes = state.colorPalettes;
+    let selectedIdx = state.selectedNode?.bgPaletteIndex;
+    if (state.selectedNode?.type === "circle") {
+      palettes = state.colorPalettes.slice(0, 3);
+      if (selectedIdx !== void 0 && selectedIdx >= 3) {
+        selectedIdx = 0;
+        state.selectedNode.bgPaletteIndex = 0;
+      }
+    }
     palettes.forEach((color, idx) => {
       const swatch = document2.createElement("div");
       swatch.className = "palette-swatch";
@@ -1070,10 +1045,13 @@
       }
       swatch.addEventListener("click", () => {
         if (state.selectedNode) {
-          state.selectedNode[propName] = idx;
+          if (state.selectedNode.type === "circle") {
+            state.selectedNode.bgPaletteIndex = idx;
+          } else {
+            state.selectedNode.bgPaletteIndex = idx;
+          }
           render();
           updatePaletteDisplay("bg-palette", context2);
-          updatePaletteDisplay("stroke-palette", context2);
           state.historyManager.save(state);
         }
       });
@@ -1187,11 +1165,9 @@
     });
     app.document.getElementById("palette-color-picker").addEventListener("input", (e) => {
       if (context2.state.editingPaletteIndex !== void 0) {
-        const palettes = context2.state.editingPaletteType === "stroke-palette" ? context2.state.strokePalettes : context2.state.colorPalettes;
-        palettes[context2.state.editingPaletteIndex] = hexToRgba(e.target.value);
+        context2.state.colorPalettes[context2.state.editingPaletteIndex] = hexToRgba(e.target.value);
         if (context2.state.selectedNode) {
           updatePaletteDisplay("bg-palette", context2);
-          updatePaletteDisplay("stroke-palette", context2);
         }
         render();
         context2.state.historyManager.save(context2.state);

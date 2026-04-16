@@ -189,6 +189,7 @@
     selectedNode: null,
     selectedNodes: [],
     selectedEdge: null,
+    lastSelectedNode: null,
     mode: "select",
     zoom: 1,
     offset: { x: 0, y: 0 },
@@ -560,11 +561,21 @@
     }
   }
   function addEdgeNode(state) {
+    let fromNode = null;
+    let toNode = null;
+    console.log("addEdgeNode:", "selectedNodes:", state.selectedNodes.length, "selectedNode:", state.selectedNode?.id, "lastSelectedNode:", state.lastSelectedNode?.id);
     if (state.selectedNodes.length >= 2) {
+      fromNode = state.selectedNodes[0];
+      toNode = state.selectedNodes[1];
+    } else if (state.selectedNode) {
+      fromNode = state.lastSelectedNode;
+      toNode = state.selectedNode;
+    }
+    if (fromNode && toNode) {
       const edge = {
         id: "edge-" + Date.now(),
-        fromNode: state.selectedNodes[0].id,
-        toNode: state.selectedNodes[1].id,
+        fromNode: fromNode.id,
+        toNode: toNode.id,
         fromSide: "bottom",
         toSide: "top",
         arrowStart: false,
@@ -575,7 +586,7 @@
       state.historyManager.save(state);
       render();
     } else {
-      alert("SHIFT\u62BC\u3057\u306A\u304C\u30892\u3064\u306E\u30CE\u30FC\u30C9\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044");
+      alert("SHIFT\u62BC\u3057\u306A\u304C\u30892\u3064\u3001\u307E\u305F\u306F1\u3064\u306E\u30CE\u30FC\u30C9\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044");
     }
   }
   function exportToObsidianCanvas(state) {
@@ -657,6 +668,7 @@
       selectedNode: null,
       selectedNodes: [],
       selectedEdge: null,
+      lastSelectedNode: null,
       mode: state.mode,
       zoom: 1,
       offset: { x: -minX + padding - width / 2, y: -minY + padding - height / 2 },
@@ -853,6 +865,11 @@
           }
           state.selectedNode = null;
         } else {
+          if (state.selectedNode && state.selectedNode !== node) {
+            state.lastSelectedNode = state.selectedNode;
+          } else if (!state.lastSelectedNode) {
+            state.lastSelectedNode = node;
+          }
           state.selectedNodes = [];
           state.selectedNode = node;
         }

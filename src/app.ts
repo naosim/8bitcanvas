@@ -47,6 +47,7 @@ interface State {
   selectedNode: CanvasNode | null;
   selectedNodes: CanvasNode[];
   selectedEdge: Edge | null;
+  lastSelectedNode: CanvasNode | null;
   mode: string;
   zoom: number;
   offset: Point;
@@ -163,6 +164,7 @@ const _state: State = {
   selectedNode: null,
   selectedNodes: [],
   selectedEdge: null,
+  lastSelectedNode: null,
   mode: 'select',
   zoom: 1,
   offset: { x: 0, y: 0 },
@@ -580,11 +582,24 @@ function deleteSelected(state: State): void {
 }
 
 function addEdgeNode(state: State): void {
+  let fromNode: CanvasNode | null = null;
+  let toNode: CanvasNode | null = null;
+
+  console.log('addEdgeNode:', 'selectedNodes:', state.selectedNodes.length, 'selectedNode:', state.selectedNode?.id, 'lastSelectedNode:', state.lastSelectedNode?.id);
+
   if (state.selectedNodes.length >= 2) {
+    fromNode = state.selectedNodes[0];
+    toNode = state.selectedNodes[1];
+  } else if (state.selectedNode) {
+    fromNode = state.lastSelectedNode;
+    toNode = state.selectedNode;
+  }
+
+  if (fromNode && toNode) {
     const edge: Edge = {
       id: 'edge-' + Date.now(),
-      fromNode: state.selectedNodes[0].id,
-      toNode: state.selectedNodes[1].id,
+      fromNode: fromNode.id,
+      toNode: toNode.id,
       fromSide: 'bottom',
       toSide: 'top',
       arrowStart: false,
@@ -595,7 +610,7 @@ function addEdgeNode(state: State): void {
     state.historyManager.save(state);
     render();
   } else {
-    alert('SHIFT押しながら2つのノードを選択してください');
+    alert('SHIFT押しながら2つ、または1つのノードを選択してください');
   }
 }
 
@@ -688,6 +703,7 @@ function exportToPng(context: Context): void {
     selectedNode: null,
     selectedNodes: [],
     selectedEdge: null,
+    lastSelectedNode: null,
     mode: state.mode,
     zoom: 1,
     offset: { x: -minX + padding - width / 2, y: -minY + padding - height / 2 },
@@ -899,6 +915,11 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
         }
         state.selectedNode = null;
       } else {
+        if (state.selectedNode && state.selectedNode !== node) {
+          state.lastSelectedNode = state.selectedNode;
+        } else if (!state.lastSelectedNode) {
+          state.lastSelectedNode = node;
+        }
         state.selectedNodes = [];
         state.selectedNode = node;
       }

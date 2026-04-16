@@ -795,8 +795,29 @@
     const { state, app } = context2;
     const { document: document2 } = app;
     if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+      e.preventDefault();
       if (e.shiftKey) redo(state);
       else undo(state);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "1") {
+      e.preventDefault();
+      addTextNode(state);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "2") {
+      e.preventDefault();
+      addCircleNode(state);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "3") {
+      e.preventDefault();
+      addEdgeNode(state);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "ArrowUp") {
+      e.preventDefault();
+      bringToFront(state);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "ArrowDown") {
+      e.preventDefault();
+      sendToBack(state);
     }
     if (e.key === "Tab") {
       e.preventDefault();
@@ -865,21 +886,38 @@
           }
           state.selectedNode = null;
         } else {
-          if (state.selectedNode && state.selectedNode !== node) {
-            state.lastSelectedNode = state.selectedNode;
-          } else if (!state.lastSelectedNode) {
-            state.lastSelectedNode = node;
+          if (e.shiftKey) {
+            if (state.selectedNode) {
+              if (!state.selectedNodes.includes(state.selectedNode)) {
+                state.selectedNodes.push(state.selectedNode);
+              }
+            }
+            if (!state.selectedNodes.includes(node)) {
+              state.selectedNodes.push(node);
+            }
+            state.selectedNode = null;
+          } else {
+            if (state.selectedNodes.length > 0) {
+            } else if (state.selectedNode && state.selectedNode !== node) {
+              state.lastSelectedNode = state.selectedNode;
+            } else if (!state.lastSelectedNode) {
+              state.lastSelectedNode = node;
+            }
+            state.selectedNodes = [];
+            state.selectedNode = node;
           }
-          state.selectedNodes = [];
-          state.selectedNode = node;
+          state.selectedEdge = null;
         }
-        state.selectedEdge = null;
         state.isDragging = true;
         state.dragStart = screenToWorld({ x, y }, context2.state, canvas);
-        state.dragOffset = {
-          x: state.dragStart.x - node.x,
-          y: state.dragStart.y - node.y
-        };
+        if (state.selectedNodes.length > 0) {
+          state.dragOffset = screenToWorld({ x, y }, context2.state, canvas);
+        } else {
+          state.dragOffset = {
+            x: state.dragStart.x - node.x,
+            y: state.dragStart.y - node.y
+          };
+        }
       }
     } else {
       const edge = findEdgeAt({ x, y }, context2);
@@ -921,6 +959,19 @@
       state.selectedNode.x = world.x - state.dragOffset.x;
       state.selectedNode.y = world.y - state.dragOffset.y;
       render();
+    } else if (state.selectedNodes.length > 0) {
+      const world = screenToWorld({ x, y }, context2.state, canvas);
+      const dx = world.x - state.dragOffset.x;
+      const dy = world.y - state.dragOffset.y;
+      const startWorld = screenToWorld({ x: state.dragStart.x, y: state.dragStart.y }, context2.state, canvas);
+      const moveX = world.x - startWorld.x;
+      const moveY = world.y - startWorld.y;
+      state.selectedNodes.forEach((node) => {
+        node.x += moveX;
+        node.y += moveY;
+      });
+      state.dragStart = { x, y };
+      render();
     } else {
       state.offset.x += e.clientX - state.dragStart.x;
       state.offset.y += e.clientY - state.dragStart.y;
@@ -930,7 +981,7 @@
   }
   function handleMouseUp(context2) {
     const { state } = context2;
-    if (state.isDragging && state.selectedNode) {
+    if (state.isDragging && (state.selectedNode || state.selectedNodes.length > 0)) {
       state.historyManager.save(state);
     }
     if (state.isResizing) {
@@ -1012,6 +1063,14 @@
     app.document.getElementById("btn-add-edge").addEventListener("click", () => addEdgeNode(_state));
     app.document.getElementById("btn-undo").addEventListener("click", () => undo(_state));
     app.document.getElementById("btn-redo").addEventListener("click", () => redo(_state));
+    app.document.getElementById("btn-zoom-in").addEventListener("click", () => {
+      _state.zoom = Math.min(5, _state.zoom * 1.2);
+      render();
+    });
+    app.document.getElementById("btn-zoom-out").addEventListener("click", () => {
+      _state.zoom = Math.max(0.1, _state.zoom / 1.2);
+      render();
+    });
     app.document.getElementById("btn-front").addEventListener("click", () => bringToFront(_state));
     app.document.getElementById("btn-back").addEventListener("click", () => sendToBack(_state));
     app.document.getElementById("btn-save").addEventListener("click", () => saveToFile(context2));

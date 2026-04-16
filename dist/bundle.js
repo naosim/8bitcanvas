@@ -538,6 +538,58 @@
     state.historyManager.save(state);
     render();
   }
+  function addCircleAtEdge(state) {
+    if (!state.selectedEdge) return;
+    const edge = state.selectedEdge;
+    const fromNode = state.nodes.find((n) => n.id === edge.fromNode);
+    const toNode = state.nodes.find((n) => n.id === edge.toNode);
+    if (!fromNode || !toNode) return;
+    const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
+    const toEdgePoint = getRectEdgePoint(toNode, fromNode);
+    const midX = (fromEdgePoint.x + toEdgePoint.x) / 2;
+    const midY = (fromEdgePoint.y + toEdgePoint.y) / 2;
+    const id = "node-" + Date.now();
+    const node = {
+      id,
+      type: "circle",
+      x: midX - 7,
+      y: midY - 7,
+      width: 14,
+      height: 14,
+      bgPaletteIndex: 4,
+      bgTransparent: false,
+      strokePaletteIndex: 2,
+      strokeTransparent: false,
+      autoResize: true
+    };
+    state.nodes.push(node);
+    state.edges = state.edges.filter((e) => e.id !== edge.id);
+    const edge1 = {
+      id: "edge-" + Date.now(),
+      fromNode: fromNode.id,
+      toNode: node.id,
+      fromSide: "bottom",
+      toSide: "top",
+      arrowStart: false,
+      arrowEnd: false
+    };
+    const edge2 = {
+      id: "edge-" + (Date.now() + 1),
+      fromNode: node.id,
+      toNode: toNode.id,
+      fromSide: "bottom",
+      toSide: "top",
+      arrowStart: false,
+      arrowEnd: edge.arrowEnd
+    };
+    state.edges.push(edge1, edge2);
+    state.selectedNode = node;
+    state.selectedEdge = null;
+    state.mode = "select";
+    updatePropertiesPanel(state, _app);
+    state.historyManager.save(state);
+    render();
+  }
   function deleteSelected(state) {
     if (state.selectedNode) {
       state.edges = state.edges.filter((e) => e.fromNode !== state.selectedNode.id && e.toNode !== state.selectedNode.id);
@@ -1055,6 +1107,7 @@
     });
     app.document.getElementById("btn-front").addEventListener("click", () => bringToFront(_state));
     app.document.getElementById("btn-back").addEventListener("click", () => sendToBack(_state));
+    app.document.getElementById("btn-add-circle-to-edge").addEventListener("click", () => addCircleAtEdge(_state));
     app.document.getElementById("btn-save").addEventListener("click", () => saveToFile(context2));
     app.document.getElementById("btn-load").addEventListener("click", () => fileInput.click());
     app.document.getElementById("btn-log").addEventListener("click", () => {

@@ -84,10 +84,6 @@ const _app: App = {
 };
 
 
-function getStrokeWidth(zoom: number): number {
-  return 3 * zoom;
-}
-
 class HistoryManager {
   private history: string[] = [];
   private historyIndex: number = -1;
@@ -291,29 +287,6 @@ function fillPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
     }
   } else {
     ctx.fillRect(x, y, w, h);
-  }
-}
-
-function drawPixelCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, pixelSize: number): void {
-  const r = Math.floor(radius / pixelSize) * pixelSize;
-  const px = Math.floor(r / pixelSize);
-  const pattern: boolean[][] = [];
-  for (let y = -px; y <= px; y++) {
-    const row: boolean[] = [];
-    for (let x = -px; x <= px; x++) {
-      const dist = Math.sqrt(x * x + y * y);
-      row.push(dist <= px);
-    }
-    pattern.push(row);
-  }
-  const offsetX = cx - px * pixelSize;
-  const offsetY = cy - px * pixelSize;
-  for (let y = 0; y < pattern.length; y++) {
-    for (let x = 0; x < pattern[y].length; x++) {
-      if (pattern[y][x]) {
-        ctx.fillRect(offsetX + x * pixelSize, offsetY + y * pixelSize, pixelSize, pixelSize);
-      }
-    }
   }
 }
 

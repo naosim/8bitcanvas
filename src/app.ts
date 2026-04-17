@@ -278,17 +278,19 @@ function drawPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 }
 
 function fillPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, pixelSize: number, cornerSize: number = 0): void {
-  for (let py = 0; py < h; py += pixelSize) {
-    for (let px = 0; px < w; px += pixelSize) {
-      if (cornerSize > 0) {
+  if (cornerSize > 0) {
+    for (let py = 0; py < h; py += pixelSize) {
+      for (let px = 0; px < w; px += pixelSize) {
         const skipCorner = (px < cornerSize && py < cornerSize) ||
                           (px >= w - cornerSize && py < cornerSize) ||
                           (px < cornerSize && py >= h - cornerSize) ||
                           (px >= w - cornerSize && py >= h - cornerSize);
         if (skipCorner) continue;
+        ctx.fillRect(x + px, y + py, pixelSize, pixelSize);
       }
-      ctx.fillRect(x + px, y + py, pixelSize, pixelSize);
     }
+  } else {
+    ctx.fillRect(x, y, w, h);
   }
 }
 
@@ -376,7 +378,7 @@ function drawNode(node: CanvasNode, context: Context): void {
 
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
-      fillPixelRect(ctx, snappedX, snappedY, w, h, pixelSize, pixelSize);
+      ctx.fillRect(snappedX, snappedY, w, h);
     }
 
     const strokeColor = isSelected ? '#ffff00' : '#ffffff';
@@ -503,21 +505,19 @@ function drawEdge(edge: Edge, context: Context): void {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = Math.atan2(dy, dx);
-    const arrowLen = pixelSize * 3;
-    const arrowAngle = Math.PI / 6;
+    const arrowOffset = pixelSize * 5;
+    const arrowTip = { x: to.x - arrowOffset * Math.cos(angle), y: to.y - arrowOffset * Math.sin(angle) };
 
-    const baseX = to.x - arrowLen * Math.cos(angle);
-    const baseY = to.y - arrowLen * Math.sin(angle);
-    const leftX = to.x - arrowLen * Math.cos(angle - arrowAngle);
-    const leftY = to.y - arrowLen * Math.sin(angle - arrowAngle);
-    const rightX = to.x - arrowLen * Math.cos(angle + arrowAngle);
-    const rightY = to.y - arrowLen * Math.sin(angle + arrowAngle);
-
-    for (let t = 0; t <= 1; t += 0.2) {
-      ctx.fillRect(snapToPixel(baseX + (leftX - baseX) * t, pixelSize), snapToPixel(baseY + (leftY - baseY) * t, pixelSize), pixelSize, pixelSize);
-      ctx.fillRect(snapToPixel(baseX + (rightX - baseX) * t, pixelSize), snapToPixel(baseY + (rightY - baseY) * t, pixelSize), pixelSize, pixelSize);
-    }
-    ctx.fillRect(snapToPixel(to.x, pixelSize), snapToPixel(to.y, pixelSize), pixelSize, pixelSize);
+    const pattern = [[1], [1, 2], [1, 2, 3], [1, 2], [1]];
+    pattern.forEach((col, i) => {
+      col.forEach((j) => {
+        const px = j * pixelSize;
+        const py = (i - 2) * pixelSize;
+        const rx = px * Math.cos(angle) - py * Math.sin(angle) + arrowTip.x;
+        const ry = px * Math.sin(angle) + py * Math.cos(angle) + arrowTip.y;
+        ctx.fillRect(rx, ry, pixelSize, pixelSize);
+      });
+    });
   }
 
   if (edge.arrowStart) {
@@ -579,6 +579,66 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
 
 /** @category util */
 // pointToLineDistance function moved to util.ts
+
+function createNew(state: State): void {
+  state.nodes = [];
+  state.edges = [];
+  state.selectedNode = null;
+  state.selectedNodes = [];
+  state.selectedEdge = null;
+  state.lastSelectedNode = null;
+  state.mode = 'select';
+  state.zoom = 1;
+  state.offset = { x: 0, y: 0 };
+
+  const textA: CanvasNode = {
+    id: 'node-start',
+    type: 'text',
+    x: -150,
+    y: -30,
+    width: 120,
+    height: 60,
+    text: 'テキストA',
+    textAlign: 'center',
+    textValign: 'middle',
+    bgPaletteIndex: 1,
+    bgTransparent: false,
+    strokeTransparent: false,
+    autoResize: true
+  };
+  const textB: CanvasNode = {
+    id: 'node-end',
+    type: 'text',
+    x: 30,
+    y: -30,
+    width: 120,
+    height: 60,
+    text: 'テキストB',
+    textAlign: 'center',
+    textValign: 'middle',
+    bgPaletteIndex: 1,
+    bgTransparent: false,
+    strokeTransparent: false,
+    autoResize: true
+  };
+  const edge: Edge = {
+    id: 'edge-init',
+    fromNode: 'node-start',
+    toNode: 'node-end',
+    fromSide: 'right',
+    toSide: 'left',
+    arrowStart: false,
+    arrowEnd: true
+  };
+
+  state.nodes.push(textA, textB);
+  state.edges.push(edge);
+  state.selectedNode = textB;
+  state.lastSelectedNode = textA;
+  state.historyManager.save(state);
+  render();
+  updatePropertiesPanel(state, _app);
+}
 
 function addTextNode(state: State, x?: number, y?: number): void {
   const id = 'node-' + Date.now();
@@ -1239,6 +1299,7 @@ function initApp(context: Context): void {
   canvas.addEventListener('mouseup', () => handleMouseUp(context));
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
+  app.document.getElementById('btn-new')!.addEventListener('click', () => createNew(_state));
   app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(_state));
   app.document.getElementById('btn-add-dot')!.addEventListener('click', () => addDotNode(_state));
   app.document.getElementById('btn-add-edge')!.addEventListener('click', () => addEdgeNode(_state));

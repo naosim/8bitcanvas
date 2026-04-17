@@ -46,15 +46,8 @@
       x: toNode.x + toNode.width / 2,
       y: toNode.y + toNode.height / 2
     };
-    if (node.type === "circle") {
-      const dx2 = to.x - from.x;
-      const dy2 = to.y - from.y;
-      const angle = Math.atan2(dy2, dx2);
-      const radius = node.width / 2;
-      return {
-        x: from.x + Math.cos(angle) * radius,
-        y: from.y + Math.sin(angle) * radius
-      };
+    if (node.type === "dot") {
+      return { x: from.x, y: from.y };
     }
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -296,28 +289,6 @@
       }
     }
   }
-  function drawPixelCircle(ctx, cx, cy, radius, pixelSize) {
-    const r = Math.floor(radius / pixelSize) * pixelSize;
-    const px = Math.floor(r / pixelSize);
-    const pattern = [];
-    for (let y = -px; y <= px; y++) {
-      const row = [];
-      for (let x = -px; x <= px; x++) {
-        const dist = Math.sqrt(x * x + y * y);
-        row.push(dist <= px);
-      }
-      pattern.push(row);
-    }
-    const offsetX = cx - px * pixelSize;
-    const offsetY = cy - px * pixelSize;
-    for (let y = 0; y < pattern.length; y++) {
-      for (let x = 0; x < pattern[y].length; x++) {
-        if (pattern[y][x]) {
-          ctx.fillRect(offsetX + x * pixelSize, offsetY + y * pixelSize, pixelSize, pixelSize);
-        }
-      }
-    }
-  }
   function drawNode(node, context2) {
     const { state, app } = context2;
     const { ctx, canvas } = app;
@@ -389,27 +360,19 @@
         });
         ctx.textAlign = "left";
       }
-    } else if (node.type === "circle") {
+    } else if (node.type === "dot" || node.type === "circle") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#44aa44";
       const bgTransparent = node.bgTransparent;
       const strokeColor = isSelected ? "#ffff00" : "#ffffff";
-      const cx = snapToPixel(pos.x + w / 2, pixelSize);
-      const cy = snapToPixel(pos.y + h / 2, pixelSize);
-      const px = Math.floor(w / 2 / pixelSize);
-      const patternExtent = 2 * px * pixelSize;
-      const circleLeft = cx - patternExtent;
-      const circleRight = cx + patternExtent;
-      const circleTop = cy - patternExtent;
-      const circleBottom = cy + patternExtent;
-      if (circleRight < 0 || circleLeft > canvas.width || circleBottom < 0 || circleTop > canvas.height) {
+      if (snappedX + w < 0 || snappedX > canvas.width || snappedY + h < 0 || snappedY > canvas.height) {
         return;
       }
       if (!bgTransparent) {
         ctx.fillStyle = bgHex;
-        drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
+        fillPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
       }
       ctx.fillStyle = strokeColor;
-      drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
+      drawPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
     }
   }
   function drawEdge(edge, context2) {
@@ -490,24 +453,8 @@
     const world = screenToWorld(point, context2.state, app.canvas);
     for (let i = state.nodes.length - 1; i >= 0; i--) {
       const node = state.nodes[i];
-      if (node.type === "circle") {
-        const pixelSize = PIXEL_SIZE * state.zoom;
-        const w = snapToPixel(node.width * state.zoom, pixelSize);
-        const cxScreen = snapToPixel(node.x * state.zoom + state.offset.x + w / 2, pixelSize);
-        const cyScreen = snapToPixel(node.y * state.zoom + state.offset.y + w / 2, pixelSize);
-        const centerX = (cxScreen + pixelSize / 2 - state.offset.x) / state.zoom;
-        const centerY = (cyScreen + pixelSize / 2 - state.offset.y) / state.zoom;
-        const px = Math.floor(w / 2 / pixelSize);
-        const visualRadius = (2 * px + 1) * pixelSize / 2 / state.zoom;
-        const dx = world.x - centerX;
-        const dy = world.y - centerY;
-        if (dx * dx + dy * dy <= visualRadius * visualRadius) {
-          return node;
-        }
-      } else {
-        if (world.x >= node.x && world.x <= node.x + node.width && world.y >= node.y && world.y <= node.y + node.height) {
-          return node;
-        }
+      if (world.x >= node.x && world.x <= node.x + node.width && world.y >= node.y && world.y <= node.y + node.height) {
+        return node;
       }
     }
     return null;
@@ -553,14 +500,14 @@
     state.historyManager.save(state);
     render();
   }
-  function addCircleNode(state) {
+  function addDotNode(state) {
     const id = "node-" + Date.now();
-    const size = PIXEL_SIZE * 4 * 2;
+    const size = PIXEL_SIZE * 3;
     const node = {
       id,
-      type: "circle",
-      x: -50,
-      y: -50,
+      type: "dot",
+      x: 0,
+      y: 0,
       width: size,
       height: size,
       bgPaletteIndex: 4,
@@ -575,7 +522,7 @@
     state.historyManager.save(state);
     render();
   }
-  function addCircleAtEdge(state) {
+  function addDotAtEdge(state) {
     if (!state.selectedEdge) return;
     const edge = state.selectedEdge;
     const fromNode = state.nodes.find((n) => n.id === edge.fromNode);
@@ -586,10 +533,10 @@
     const midX = (fromEdgePoint.x + toEdgePoint.x) / 2;
     const midY = (fromEdgePoint.y + toEdgePoint.y) / 2;
     const id = "node-" + Date.now();
-    const size = PIXEL_SIZE * 4 * 2;
+    const size = PIXEL_SIZE * 3;
     const node = {
       id,
-      type: "circle",
+      type: "dot",
       x: midX - size / 2,
       y: midY - size / 2,
       width: size,
@@ -682,7 +629,7 @@
     const data = {
       nodes: state.nodes.map((n) => ({
         id: n.id,
-        type: n.type === "circle" ? "text" : n.type,
+        type: n.type === "dot" ? "text" : n.type,
         x: Math.round(n.x),
         y: Math.round(n.y),
         width: n.width,
@@ -796,8 +743,8 @@
           state.nodes = data.nodes.map((n) => {
             const node = { ...n };
             if (n.width <= 20 && n.height <= 20) {
-              node.type = "circle";
-              const oldSize = PIXEL_SIZE * 4 * 2;
+              node.type = "dot";
+              const oldSize = PIXEL_SIZE * 3;
               node.width = oldSize;
               node.height = oldSize;
               node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
@@ -890,7 +837,7 @@
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "2") {
       e.preventDefault();
-      addCircleNode(state);
+      addDotNode(state);
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "3") {
       e.preventDefault();
@@ -1096,7 +1043,7 @@
     container.innerHTML = "";
     let palettes = state.colorPalettes;
     let selectedIdx = state.selectedNode?.bgPaletteIndex;
-    if (state.selectedNode?.type === "circle") {
+    if (state.selectedNode?.type === "dot") {
       palettes = state.colorPalettes.slice(0, 3);
       if (selectedIdx !== void 0 && selectedIdx >= 3) {
         selectedIdx = 0;
@@ -1112,7 +1059,7 @@
       }
       swatch.addEventListener("click", () => {
         if (state.selectedNode) {
-          if (state.selectedNode.type === "circle") {
+          if (state.selectedNode.type === "dot") {
             state.selectedNode.bgPaletteIndex = idx;
           } else {
             state.selectedNode.bgPaletteIndex = idx;
@@ -1138,7 +1085,7 @@
     canvas.addEventListener("mouseup", () => handleMouseUp(context2));
     canvas.addEventListener("wheel", (e) => handleWheel(e, context2));
     app.document.getElementById("btn-add-text").addEventListener("click", () => addTextNode(_state));
-    app.document.getElementById("btn-add-circle").addEventListener("click", () => addCircleNode(_state));
+    app.document.getElementById("btn-add-dot").addEventListener("click", () => addDotNode(_state));
     app.document.getElementById("btn-add-edge").addEventListener("click", () => addEdgeNode(_state));
     app.document.getElementById("btn-undo").addEventListener("click", () => undo(_state));
     app.document.getElementById("btn-redo").addEventListener("click", () => redo(_state));
@@ -1152,7 +1099,7 @@
     });
     app.document.getElementById("btn-front").addEventListener("click", () => bringToFront(_state));
     app.document.getElementById("btn-back").addEventListener("click", () => sendToBack(_state));
-    app.document.getElementById("btn-add-circle-to-edge").addEventListener("click", () => addCircleAtEdge(_state));
+    app.document.getElementById("btn-add-dot-to-edge").addEventListener("click", () => addDotAtEdge(_state));
     app.document.getElementById("btn-save").addEventListener("click", () => saveToFile(context2));
     app.document.getElementById("btn-load").addEventListener("click", () => fileInput.click());
     app.document.getElementById("btn-log").addEventListener("click", () => {

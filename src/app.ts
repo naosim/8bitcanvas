@@ -434,28 +434,21 @@ function drawNode(node: CanvasNode, context: Context): void {
       });
       ctx.textAlign = 'left';
     }
-  } else if (node.type === 'circle') {
+  } else if (node.type === 'dot' || node.type === 'circle') {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#44aa44';
     const bgTransparent = node.bgTransparent;
     const strokeColor = isSelected ? '#ffff00' : '#ffffff';
-    const cx = snapToPixel(pos.x + w / 2, pixelSize);
-    const cy = snapToPixel(pos.y + h / 2, pixelSize);
-    const px = Math.floor(w / 2 / pixelSize);
-    const patternExtent = 2 * px * pixelSize;
-    const circleLeft = cx - patternExtent;
-    const circleRight = cx + patternExtent;
-    const circleTop = cy - patternExtent;
-    const circleBottom = cy + patternExtent;
-    if (circleRight < 0 || circleLeft > canvas.width || circleBottom < 0 || circleTop > canvas.height) {
+
+    if (snappedX + w < 0 || snappedX > canvas.width || snappedY + h < 0 || snappedY > canvas.height) {
       return;
     }
 
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
-      drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
+      fillPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
     }
     ctx.fillStyle = strokeColor;
-    drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
+    drawPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
   }
 }
 
@@ -556,25 +549,9 @@ function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const world = screenToWorld(point, context.state, app.canvas);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
-    if (node.type === 'circle') {
-      const pixelSize = PIXEL_SIZE * state.zoom;
-      const w = snapToPixel(node.width * state.zoom, pixelSize);
-      const cxScreen = snapToPixel((node.x * state.zoom + state.offset.x) + w / 2, pixelSize);
-      const cyScreen = snapToPixel((node.y * state.zoom + state.offset.y) + w / 2, pixelSize);
-      const centerX = (cxScreen + pixelSize / 2 - state.offset.x) / state.zoom;
-      const centerY = (cyScreen + pixelSize / 2 - state.offset.y) / state.zoom;
-      const px = Math.floor(w / 2 / pixelSize);
-      const visualRadius = (2 * px + 1) * pixelSize / 2 / state.zoom;
-      const dx = world.x - centerX;
-      const dy = world.y - centerY;
-      if (dx * dx + dy * dy <= visualRadius * visualRadius) {
-        return node;
-      }
-    } else {
-      if (world.x >= node.x && world.x <= node.x + node.width &&
-        world.y >= node.y && world.y <= node.y + node.height) {
-        return node;
-      }
+    if (world.x >= node.x && world.x <= node.x + node.width &&
+      world.y >= node.y && world.y <= node.y + node.height) {
+      return node;
     }
   }
   return null;
@@ -628,14 +605,14 @@ function addTextNode(state: State, x?: number, y?: number): void {
   render();
 }
 
-function addCircleNode(state: State): void {
+function addDotNode(state: State): void {
   const id = 'node-' + Date.now();
-  const size = PIXEL_SIZE * 4 * 2;
+  const size = PIXEL_SIZE * 3;
   const node: CanvasNode = {
     id,
-    type: 'circle',
-    x: -50,
-    y: -50,
+    type: 'dot',
+    x: 0,
+    y: 0,
     width: size,
     height: size,
     bgPaletteIndex: 4,
@@ -651,7 +628,7 @@ function addCircleNode(state: State): void {
   render();
 }
 
-function addCircleAtEdge(state: State): void {
+function addDotAtEdge(state: State): void {
   if (!state.selectedEdge) return;
   const edge = state.selectedEdge;
   const fromNode = state.nodes.find(n => n.id === edge.fromNode);
@@ -664,10 +641,10 @@ function addCircleAtEdge(state: State): void {
   const midY = (fromEdgePoint.y + toEdgePoint.y) / 2;
 
   const id = 'node-' + Date.now();
-  const size = PIXEL_SIZE * 4 * 2;
+  const size = PIXEL_SIZE * 3;
   const node: CanvasNode = {
     id,
-    type: 'circle',
+    type: 'dot',
     x: midX - size / 2,
     y: midY - size / 2,
     width: size,
@@ -769,7 +746,7 @@ function exportToObsidianCanvas(state: State): string {
   const data = {
     nodes: state.nodes.map(n => ({
       id: n.id,
-      type: n.type === 'circle' ? 'text' : n.type,
+      type: n.type === 'dot' ? 'text' : n.type,
       x: Math.round(n.x),
       y: Math.round(n.y),
       width: n.width,
@@ -896,8 +873,8 @@ function loadFromFile(file: File, context: Context): void {
         state.nodes = data.nodes.map((n: any) => {
           const node: CanvasNode = { ...n };
           if (n.width <= 20 && n.height <= 20) {
-            node.type = 'circle';
-            const oldSize = PIXEL_SIZE * 4 * 2;
+            node.type = 'dot';
+            const oldSize = PIXEL_SIZE * 3;
             node.width = oldSize;
             node.height = oldSize;
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
@@ -996,7 +973,7 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
   }
   if ((e.ctrlKey || e.metaKey) && e.key === '2') {
     e.preventDefault();
-    addCircleNode(state);
+    addDotNode(state);
   }
   if ((e.ctrlKey || e.metaKey) && e.key === '3') {
     e.preventDefault();
@@ -1218,7 +1195,7 @@ function updatePaletteDisplay(containerId: string, context: Context): void {
   container.innerHTML = '';
   let palettes = state.colorPalettes;
   let selectedIdx = state.selectedNode?.bgPaletteIndex;
-  if (state.selectedNode?.type === 'circle') {
+  if (state.selectedNode?.type === 'dot') {
     palettes = state.colorPalettes.slice(0, 3);
     if (selectedIdx !== undefined && selectedIdx >= 3) {
       selectedIdx = 0;
@@ -1234,7 +1211,7 @@ function updatePaletteDisplay(containerId: string, context: Context): void {
     }
     swatch.addEventListener('click', () => {
       if (state.selectedNode) {
-        if (state.selectedNode.type === 'circle') {
+        if (state.selectedNode.type === 'dot') {
           state.selectedNode.bgPaletteIndex = idx;
         } else {
           state.selectedNode.bgPaletteIndex = idx;
@@ -1263,7 +1240,7 @@ function initApp(context: Context): void {
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
   app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(_state));
-  app.document.getElementById('btn-add-circle')!.addEventListener('click', () => addCircleNode(_state));
+  app.document.getElementById('btn-add-dot')!.addEventListener('click', () => addDotNode(_state));
   app.document.getElementById('btn-add-edge')!.addEventListener('click', () => addEdgeNode(_state));
   app.document.getElementById('btn-undo')!.addEventListener('click', () => undo(_state));
   app.document.getElementById('btn-redo')!.addEventListener('click', () => redo(_state));
@@ -1277,7 +1254,7 @@ function initApp(context: Context): void {
   });
   app.document.getElementById('btn-front')!.addEventListener('click', () => bringToFront(_state));
   app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(_state));
-  app.document.getElementById('btn-add-circle-to-edge')!.addEventListener('click', () => addCircleAtEdge(_state));
+  app.document.getElementById('btn-add-dot-to-edge')!.addEventListener('click', () => addDotAtEdge(_state));
   app.document.getElementById('btn-save')!.addEventListener('click', () => saveToFile(context));
   app.document.getElementById('btn-load')!.addEventListener('click', () => fileInput.click());
   app.document.getElementById('btn-log')!.addEventListener('click', () => {

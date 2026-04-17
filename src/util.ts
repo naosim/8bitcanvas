@@ -11,7 +11,7 @@ export interface Size {
 }
 
 export interface Figure extends Point, Size {
-  type: 'text' | 'circle';
+  type: 'text' | 'dot' | 'circle';
 }
 
 export function rgbaToHex(rgba: string): string {
@@ -74,15 +74,8 @@ export function getRectEdgePoint(node: Figure, toNode: Figure): Point {
     y: toNode.y + toNode.height / 2
   };
 
-  if (node.type === 'circle') {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const angle = Math.atan2(dy, dx);
-    const radius = node.width / 2;
-    return {
-      x: from.x + Math.cos(angle) * radius,
-      y: from.y + Math.sin(angle) * radius
-    };
+  if (node.type === 'dot') {
+    return { x: from.x, y: from.y };
   }
 
   const dx = to.x - from.x;

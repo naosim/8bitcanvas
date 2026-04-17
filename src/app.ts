@@ -304,8 +304,8 @@ function drawPixelCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
     }
     pattern.push(row);
   }
-  const offsetX = Math.floor(cx / pixelSize) * pixelSize;
-  const offsetY = Math.floor(cy / pixelSize) * pixelSize;
+  const offsetX = cx - px * pixelSize;
+  const offsetY = cy - px * pixelSize;
   for (let y = 0; y < pattern.length; y++) {
     for (let x = 0; x < pattern[y].length; x++) {
       if (pattern[y][x]) {
@@ -438,13 +438,24 @@ function drawNode(node: CanvasNode, context: Context): void {
     const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#44aa44';
     const bgTransparent = node.bgTransparent;
     const strokeColor = isSelected ? '#ffff00' : '#ffffff';
+    const cx = snapToPixel(pos.x + w / 2, pixelSize);
+    const cy = snapToPixel(pos.y + h / 2, pixelSize);
+    const px = Math.floor(w / 2 / pixelSize);
+    const patternExtent = 2 * px * pixelSize;
+    const circleLeft = cx - patternExtent;
+    const circleRight = cx + patternExtent;
+    const circleTop = cy - patternExtent;
+    const circleBottom = cy + patternExtent;
+    if (circleRight < 0 || circleLeft > canvas.width || circleBottom < 0 || circleTop > canvas.height) {
+      return;
+    }
 
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
-      drawPixelCircle(ctx, snappedX + w / 2, snappedY + h / 2, w / 2, pixelSize);
+      drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
     }
     ctx.fillStyle = strokeColor;
-    drawPixelCircle(ctx, snappedX + w / 2, snappedY + h / 2, w / 2, pixelSize);
+    drawPixelCircle(ctx, cx, cy, w / 2, pixelSize);
   }
 }
 
@@ -545,9 +556,25 @@ function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const world = screenToWorld(point, context.state, app.canvas);
   for (let i = state.nodes.length - 1; i >= 0; i--) {
     const node = state.nodes[i];
-    if (world.x >= node.x && world.x <= node.x + node.width &&
-      world.y >= node.y && world.y <= node.y + node.height) {
-      return node;
+    if (node.type === 'circle') {
+      const pixelSize = PIXEL_SIZE * state.zoom;
+      const w = snapToPixel(node.width * state.zoom, pixelSize);
+      const cxScreen = snapToPixel((node.x * state.zoom + state.offset.x) + w / 2, pixelSize);
+      const cyScreen = snapToPixel((node.y * state.zoom + state.offset.y) + w / 2, pixelSize);
+      const centerX = (cxScreen + pixelSize / 2 - state.offset.x) / state.zoom;
+      const centerY = (cyScreen + pixelSize / 2 - state.offset.y) / state.zoom;
+      const px = Math.floor(w / 2 / pixelSize);
+      const visualRadius = (2 * px + 1) * pixelSize / 2 / state.zoom;
+      const dx = world.x - centerX;
+      const dy = world.y - centerY;
+      if (dx * dx + dy * dy <= visualRadius * visualRadius) {
+        return node;
+      }
+    } else {
+      if (world.x >= node.x && world.x <= node.x + node.width &&
+        world.y >= node.y && world.y <= node.y + node.height) {
+        return node;
+      }
     }
   }
   return null;
@@ -603,13 +630,14 @@ function addTextNode(state: State, x?: number, y?: number): void {
 
 function addCircleNode(state: State): void {
   const id = 'node-' + Date.now();
+  const size = PIXEL_SIZE * 4 * 2;
   const node: CanvasNode = {
     id,
     type: 'circle',
     x: -50,
     y: -50,
-    width: 14,
-    height: 14,
+    width: size,
+    height: size,
     bgPaletteIndex: 4,
     bgTransparent: false,
     strokeTransparent: false,
@@ -636,13 +664,14 @@ function addCircleAtEdge(state: State): void {
   const midY = (fromEdgePoint.y + toEdgePoint.y) / 2;
 
   const id = 'node-' + Date.now();
+  const size = PIXEL_SIZE * 4 * 2;
   const node: CanvasNode = {
     id,
     type: 'circle',
-    x: midX - 7,
-    y: midY - 7,
-    width: 14,
-    height: 14,
+    x: midX - size / 2,
+    y: midY - size / 2,
+    width: size,
+    height: size,
     bgPaletteIndex: 4,
     bgTransparent: false,
     strokeTransparent: false,
@@ -868,6 +897,9 @@ function loadFromFile(file: File, context: Context): void {
           const node: CanvasNode = { ...n };
           if (n.width <= 20 && n.height <= 20) {
             node.type = 'circle';
+            const oldSize = PIXEL_SIZE * 4 * 2;
+            node.width = oldSize;
+            node.height = oldSize;
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
           } else {
             node.type = n.type || 'text';
@@ -1036,9 +1068,15 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
 
     if (inResizeZone && node.autoResize === false) {
       state.isResizing = true;
+      state.isDragging = true;
       state.resizeNode = node;
       state.resizeStart = { x: world.x, y: world.y };
       state.resizeStartSize = { width: node.width, height: node.height };
+      state.dragStart = { x: e.clientX, y: e.clientY };
+      state.dragOffset = {
+        x: world.x - node.x,
+        y: world.y - node.y
+      };
     } else {
       if (e.shiftKey) {
         if (state.selectedNode) {

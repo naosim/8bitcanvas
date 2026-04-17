@@ -9,6 +9,17 @@ if [ $? -ne 0 ]; then
 fi
 
 # Compile TypeScript and bundle to single file
-npx esbuild src/app.ts --bundle --outfile=dist/bundle.js --format=iife
+# Use platform-specific esbuild
+if [ -f "node_modules/@esbuild/win32-x64/esbuild.exe" ]; then
+  node_modules/@esbuild/win32-x64/esbuild.exe src/app.ts --bundle --outfile=dist/bundle.js --format=iife
+elif [ -f "node_modules/@esbuild/linux-x64/esbuild" ]; then
+  node_modules/@esbuild/linux-x64/esbuild src/app.ts --bundle --outfile=dist/bundle.js --format=iife
+else
+  npx esbuild src/app.ts --bundle --outfile=dist/bundle.js --format=iife
+fi
+if [ $? -ne 0 ]; then
+  echo "Build failed"
+  exit 1
+fi
 
 echo "Build complete: dist/bundle.js"

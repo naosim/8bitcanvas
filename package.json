@@ -9,5 +9,9 @@
   "devDependencies": {
     "esbuild": "^0.28.0",
     "typescript": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "^0.28.0",
+    "@esbuild/win32-x64": "^0.28.0"
   }
 }

@@ -345,86 +345,89 @@ function drawNode(node: CanvasNode, context: Context): void {
   }
 
   if (node.type === 'text') {
-    const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#4444aa';
-    const bgTransparent = node.bgTransparent;
-    const strokeTransparent = node.strokeTransparent;
-
-    if (!bgTransparent) {
-      ctx.fillStyle = bgHex;
-      ctx.fillRect(snappedX, snappedY, w, h);
-    }
-
-    const strokeColor = isSelected ? '#ffff00' : '#ffffff';
-    if (isSelected || !strokeTransparent) {
-      ctx.fillStyle = strokeColor;
-      drawPixelRect(ctx, snappedX, snappedY, w, h, pixelSize, pixelSize);
-    }
-
-    if (node.text && state.zoom > 0.3) {
-      const lines = node.text.split('\n');
-      const lineHeight = 18 * state.zoom;
-      const align = node.textAlign || 'left';
-      const valign = node.textValign || 'top';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `${14 * state.zoom}px 'DotGothic16'`;
-
-      const verticalPadding = VERTICAL_PADDING * state.zoom;
-      const verticalPaddingTop = verticalPadding / 2;
-      const verticalPaddingBottom = verticalPadding / 2;
-
-      const totalTextHeight = lines.length * lineHeight;
-
-      const fontSize = 14 * state.zoom;
-      const baselineOffset = fontSize * 0.75;
-
-      let textY = 0;
-      if (valign === 'top') {
-        textY = baselineOffset + verticalPaddingTop;
-      } else if (valign === 'middle') {
-        textY = (h - totalTextHeight) / 2 + baselineOffset;
-      } else if (valign === 'bottom') {
-        textY = h - totalTextHeight + baselineOffset;
-      }
-      const startY = snappedY + textY;
-
-      lines.forEach((line, i) => {
-        let x = snappedX + HORIZONTAL_PADDING / 2;
-        if (align === 'center') {
-          x = snappedX + w / 2;
-        } else if (align === 'right') {
-          x = snappedX + w - HORIZONTAL_PADDING / 2;
-        }
-        const y = startY + i * lineHeight;
-
-        if (align === 'center') {
-          ctx.textAlign = 'center';
-          ctx.fillText(line, x, y);
-        } else if (align === 'right') {
-          ctx.textAlign = 'right';
-          ctx.fillText(line, x, y);
-        } else {
-          ctx.textAlign = 'left';
-          ctx.fillText(line, x, y);
-        }
-      });
-      ctx.textAlign = 'left';
-    }
+    drawTextNode(ctx, node, snappedX, snappedY, w, h, pixelSize, isSelected, state.zoom, state.colorPalettes);
   } else if (node.type === 'dot' || node.type === 'circle') {
-    const bgHex = state.colorPalettes[node.bgPaletteIndex] || '#44aa44';
-    const bgTransparent = node.bgTransparent;
-    const strokeColor = isSelected ? '#ffff00' : '#ffffff';
-
-    if (snappedX + w < 0 || snappedX > canvas.width || snappedY + h < 0 || snappedY > canvas.height) {
-      return;
-    }
-
-    if (!bgTransparent) {
-      ctx.fillStyle = bgHex;
-      fillPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
-    }
-    ctx.fillStyle = strokeColor;
-    drawPixelRect(ctx, snappedX, snappedY, w, h, pixelSize);
+    drawDotNode(ctx, node, snappedX, snappedY, w, h, pixelSize, isSelected, state.zoom, state.colorPalettes);
   }
+}
+
+function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number, y: number, w: number, h: number, pixelSize: number, isSelected: boolean, zoom: number, colorPalettes: string[]): void {
+  const bgHex = colorPalettes[node.bgPaletteIndex] || '#4444aa';
+  const bgTransparent = node.bgTransparent;
+  const strokeTransparent = node.strokeTransparent;
+
+  if (!bgTransparent) {
+    ctx.fillStyle = bgHex;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  const strokeColor = isSelected ? '#ffff00' : '#ffffff';
+  if (isSelected || !strokeTransparent) {
+    ctx.fillStyle = strokeColor;
+    drawPixelRect(ctx, x, y, w, h, pixelSize, pixelSize);
+  }
+
+  if (node.text && zoom > 0.3) {
+    const lines = node.text.split('\n');
+    const lineHeight = 18 * zoom;
+    const align = node.textAlign || 'left';
+    const valign = node.textValign || 'top';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${14 * zoom}px 'DotGothic16'`;
+
+    const verticalPadding = VERTICAL_PADDING * zoom;
+    const verticalPaddingTop = verticalPadding / 2;
+
+    const totalTextHeight = lines.length * lineHeight;
+
+    const fontSize = 14 * zoom;
+    const baselineOffset = fontSize * 0.75;
+
+    let textY = 0;
+    if (valign === 'top') {
+      textY = baselineOffset + verticalPaddingTop;
+    } else if (valign === 'middle') {
+      textY = (h - totalTextHeight) / 2 + baselineOffset;
+    } else if (valign === 'bottom') {
+      textY = h - totalTextHeight + baselineOffset;
+    }
+    const startY = y + textY;
+
+    lines.forEach((line, i) => {
+      let px = x + HORIZONTAL_PADDING / 2;
+      if (align === 'center') {
+        px = x + w / 2;
+      } else if (align === 'right') {
+        px = x + w - HORIZONTAL_PADDING / 2;
+      }
+      const py = startY + i * lineHeight;
+
+      if (align === 'center') {
+        ctx.textAlign = 'center';
+        ctx.fillText(line, px, py);
+      } else if (align === 'right') {
+        ctx.textAlign = 'right';
+        ctx.fillText(line, px, py);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.fillText(line, px, py);
+      }
+    });
+    ctx.textAlign = 'left';
+  }
+}
+
+function drawDotNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number, y: number, w: number, h: number, pixelSize: number, isSelected: boolean, zoom: number, colorPalettes: string[]): void {
+  const bgHex = colorPalettes[node.bgPaletteIndex] || '#44aa44';
+  const bgTransparent = node.bgTransparent;
+  const strokeColor = isSelected ? '#ffff00' : '#ffffff';
+
+  if (!bgTransparent) {
+    ctx.fillStyle = bgHex;
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.fillStyle = strokeColor;
+  drawPixelRect(ctx, x, y, w, h, pixelSize);
 }
 
 function drawEdge(edge: Edge, context: Context): void {
@@ -500,9 +503,6 @@ function drawEdge(edge: Edge, context: Context): void {
     drawPixelArrowHead(from, to, pixelSize);
   }
 }
-
-/** @category util */
-// getRectEdgePoint function moved to util.ts
 
 function renderFull(context: Context): void {
   const { state, app } = context;

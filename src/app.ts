@@ -1,5 +1,3 @@
-
-
 import {
   Point,
   Figure,
@@ -62,6 +60,10 @@ interface State {
   selectedPaletteIndex: number;
   editingPaletteIndex: number | undefined;
   editingPaletteType: string | undefined;
+  edgeAnimation: { fromNode: string, toNode: string, progress: number } | null;
+  edgeDeleteAnimation: { fromNode: string, toNode: string, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
+  nodeDeleteAnimation: { node: CanvasNode, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
+  nodeCreateAnimation: { nodeId: string, progress: number } | null;
 }
 
 interface App {
@@ -82,7 +84,6 @@ const _app: App = {
   ctx: (document.getElementById('canvas') as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D,
   fileInput: document.getElementById('file-input') as HTMLInputElement
 };
-
 
 class HistoryManager {
   private history: string[] = [];
@@ -174,7 +175,11 @@ const _state: State = {
   ],
   selectedPaletteIndex: 0,
   editingPaletteIndex: undefined,
-  editingPaletteType: undefined
+  editingPaletteType: undefined,
+  edgeAnimation: null,
+  edgeDeleteAnimation: null,
+  nodeDeleteAnimation: null,
+  nodeCreateAnimation: null
 };
 
 const context: Context = { state: _state, app: _app };
@@ -216,11 +221,6 @@ function redo(state: State): void {
   }
 }
 
-// Functions moved to util.ts
-
-
-// worldToScreen function moved to util.ts
-
 function drawGrid(app: App, state: State): void {
   const { ctx, canvas } = app;
   const gridSize = 32 * state.zoom;
@@ -255,13 +255,17 @@ function snapToPixel(val: number, pixelSize: number): number {
   return Math.round(val / pixelSize) * pixelSize;
 }
 
-function drawPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, pixelSize: number, hasCorner: boolean = false): void {
-  if (hasCorner) {
-    const cs = pixelSize;
+function drawPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, pixelSize: number, cornerSize: number = 0): void {
+  if (cornerSize > 0) {
+    const cs = cornerSize;
     ctx.fillRect(x + cs, y, w - cs * 2, pixelSize);
     ctx.fillRect(x + cs, y + h - pixelSize, w - cs * 2, pixelSize);
     ctx.fillRect(x, y + cs, pixelSize, h - cs * 2);
     ctx.fillRect(x + w - pixelSize, y + cs, pixelSize, h - cs * 2);
+    ctx.fillRect(x + pixelSize, y + pixelSize, pixelSize, pixelSize);
+    ctx.fillRect(x + w - pixelSize * 2, y + pixelSize, pixelSize, pixelSize);
+    ctx.fillRect(x + pixelSize, y + h - pixelSize * 2, pixelSize, pixelSize);
+    ctx.fillRect(x + w - pixelSize * 2, y + h - pixelSize * 2, pixelSize, pixelSize);
   } else {
     ctx.fillRect(x, y, w, pixelSize);
     ctx.fillRect(x, y + h - pixelSize, w, pixelSize);
@@ -342,36 +346,52 @@ function drawNode(node: CanvasNode, context: Context): void {
   }
 
   if (node.type === 'text') {
-    drawTextNode(ctx, node, snappedX, snappedY, w, h, pixelSize, isSelected, state.zoom, state.colorPalettes);
+    drawTextNode(ctx, node, snappedX, snappedY, w, h, pixelSize, isSelected, state.zoom, state.colorPalettes, state);
   } else if (node.type === 'dot' || node.type === 'circle') {
     drawDotNode(ctx, node, snappedX, snappedY, w, h, pixelSize, isSelected, state.zoom, state.colorPalettes);
   }
 }
 
-function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number, y: number, w: number, h: number, pixelSize: number, isSelected: boolean, zoom: number, colorPalettes: string[]): void {
+function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number, y: number, w: number, h: number, pixelSize: number, isSelected: boolean, zoom: number, colorPalettes: string[], state: State): void {
+  let scale = 1;
+  if (state.nodeCreateAnimation && state.nodeCreateAnimation.nodeId === node.id) {
+    const p = state.nodeCreateAnimation.progress;
+    if (p < 0.7) {
+      scale = 1 - Math.pow(1 - p / 0.7, 3);
+    } else {
+      scale = 1;
+    }
+  }
+
+  const centerX = x + w / 2;
+  const centerY = y + h / 2;
+  const scaledW = w * scale;
+  const scaledH = h * scale;
+  const drawX = centerX - scaledW / 2;
+  const drawY = centerY - scaledH / 2;
+
   const bgHex = colorPalettes[node.bgPaletteIndex] || '#4444aa';
   const bgTransparent = node.bgTransparent;
   const strokeTransparent = node.strokeTransparent;
 
   if (!bgTransparent) {
     ctx.fillStyle = bgHex;
-    ctx.fillRect(x + pixelSize, y + pixelSize, w - pixelSize * 2, h - pixelSize * 2);
+    ctx.fillRect(drawX, drawY, scaledW, scaledH);
   }
 
   const strokeColor = isSelected ? '#ffff00' : '#ffffff';
   if (isSelected || !strokeTransparent) {
     ctx.fillStyle = strokeColor;
-    drawPixelRect(ctx, x, y, w, h, pixelSize, true);
+    drawPixelRect(ctx, drawX, drawY, scaledW, scaledH, pixelSize, pixelSize);
   }
 
-  if (node.text && zoom > 0.3) {
+  if (node.text && zoom > 0.3 && scale > 0.1) {
     const lines = node.text.split('\n');
     const lineHeight = 18 * zoom;
     const align = node.textAlign || 'left';
     const valign = node.textValign || 'top';
     ctx.fillStyle = '#ffffff';
-    const FONT_SIZE = 16;
-    ctx.font = `${FONT_SIZE * zoom}px 'DotGothic16'`;
+    ctx.font = `${14 * zoom}px 'DotGothic16'`;
 
     const verticalPadding = VERTICAL_PADDING * zoom;
     const verticalPaddingTop = verticalPadding / 2;
@@ -385,18 +405,18 @@ function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number
     if (valign === 'top') {
       textY = baselineOffset + verticalPaddingTop;
     } else if (valign === 'middle') {
-      textY = (h - totalTextHeight) / 2 + baselineOffset;
+      textY = (scaledH - totalTextHeight) / 2 + baselineOffset;
     } else if (valign === 'bottom') {
-      textY = h - totalTextHeight + baselineOffset;
+      textY = scaledH - totalTextHeight + baselineOffset;
     }
-    const startY = y + textY;
+    const startY = drawY + textY;
 
     lines.forEach((line, i) => {
-      let px = x + HORIZONTAL_PADDING / 2;
+      let px = drawX + HORIZONTAL_PADDING / 2;
       if (align === 'center') {
-        px = x + w / 2;
+        px = drawX + scaledW / 2;
       } else if (align === 'right') {
-        px = x + w - HORIZONTAL_PADDING / 2;
+        px = drawX + scaledW - HORIZONTAL_PADDING / 2;
       }
       const py = startY + i * lineHeight;
 
@@ -503,10 +523,110 @@ function renderFull(context: Context): void {
   drawGrid(context.app, context.state);
 
   state.nodes.forEach(node => drawNode(node, context));
-  state.edges.forEach(edge => drawEdge(edge, context));
+
+  const animatingFrom = state.edgeAnimation?.fromNode;
+  const animatingTo = state.edgeAnimation?.toNode;
+
+  state.edges.forEach(edge => {
+    if (animatingFrom === edge.fromNode && animatingTo === edge.toNode) {
+      return;
+    }
+    drawEdge(edge, context);
+  });
+
+  if (animatingFrom && animatingTo && state.edgeAnimation) {
+    const from = state.nodes.find(n => n.id === animatingFrom);
+    const to = state.nodes.find(n => n.id === animatingTo);
+    if (from && to) {
+      drawPartialEdge(context, from, to, state.edgeAnimation.progress);
+    }
+  } else {
+    const edge = state.edges.find(e => e.fromNode === animatingFrom && e.toNode === animatingTo);
+    if (edge) {
+      drawEdge(edge, context);
+    }
+  }
+
+  if (state.edgeDeleteAnimation) {
+    if (state.edgeDeleteAnimation.progress >= 1) return;
+    const pixelSize = PIXEL_SIZE * state.zoom;
+    const alpha = 1 - state.edgeDeleteAnimation.progress;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    state.edgeDeleteAnimation.dots.forEach(dot => {
+      ctx.fillRect(snapToPixel(dot.x, pixelSize), snapToPixel(dot.y, pixelSize), pixelSize, pixelSize);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  if (state.nodeDeleteAnimation) {
+    if (state.nodeDeleteAnimation.progress >= 1) return;
+    const pixelSize = PIXEL_SIZE * state.zoom;
+    const alpha = 1 - state.nodeDeleteAnimation.progress;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    state.nodeDeleteAnimation.dots.forEach(dot => {
+      ctx.fillRect(snapToPixel(dot.x, pixelSize), snapToPixel(dot.y, pixelSize), pixelSize, pixelSize);
+    });
+    ctx.globalAlpha = 1;
+  }
 }
 
 const render = () => renderFull(context);
+
+function drawPartialEdge(context: Context, fromNode: CanvasNode, toNode: CanvasNode, progress: number): void {
+  const { state, app } = context;
+  const { ctx, canvas } = app;
+  const fromPos = getRectEdgePoint(fromNode, toNode);
+  const toPos = getRectEdgePoint(toNode, fromNode);
+  const from = worldToScreen(fromPos, state, canvas);
+  const to = worldToScreen(toPos, state, canvas);
+  if (from.x === to.x && from.y === to.y) return;
+  const pixelSize = PIXEL_SIZE * state.zoom;
+  const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
+  const steps = Math.max(1, Math.floor(dist / pixelSize));
+  const currentSteps = Math.floor(steps * progress);
+  ctx.fillStyle = '#ffffff';
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  for (let i = 0; i <= currentSteps; i++) {
+    const t = i / steps;
+    const x = snapToPixel(from.x + dx * t, pixelSize);
+    const y = snapToPixel(from.y + dy * t, pixelSize);
+    ctx.fillRect(x, y, pixelSize, pixelSize);
+  }
+}
+
+function drawEdgeAnimation(context: Context): void {
+  const { state, app } = context;
+  const { ctx, canvas } = app;
+  if (!state.edgeAnimation) return;
+  const { fromNode, toNode, progress } = state.edgeAnimation;
+  const from = state.nodes.find(n => n.id === fromNode);
+  const to = state.nodes.find(n => n.id === toNode);
+  if (!from || !to) return;
+  if (progress >= 1) {
+    state.edgeAnimation = null;
+    return;
+  }
+  const fromPos = getRectEdgePoint(from, to);
+  const toPos = getRectEdgePoint(to, from);
+  const fromScreen = worldToScreen(fromPos, state, canvas);
+  const toScreen = worldToScreen(toPos, state, canvas);
+  const pixelSize = PIXEL_SIZE * state.zoom;
+  const dx = toScreen.x - fromScreen.x;
+  const dy = toScreen.y - fromScreen.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.max(1, Math.floor(dist / pixelSize));
+  const currentSteps = Math.floor(steps * progress);
+  for (let i = 0; i <= currentSteps; i++) {
+    const t = i / steps;
+    const x = snapToPixel(fromScreen.x + dx * t, pixelSize);
+    const y = snapToPixel(fromScreen.y + dy * t, pixelSize);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, pixelSize, pixelSize);
+  }
+}
 
 function findNodeAt(point: Point, context: Context): CanvasNode | null {
   const { state, app } = context;
@@ -540,9 +660,6 @@ function findEdgeAt(point: Point, context: Context): Edge | null {
   }
   return null;
 }
-
-/** @category util */
-// pointToLineDistance function moved to util.ts
 
 function createNew(state: State): void {
   state.nodes = [];
@@ -624,6 +741,8 @@ function addTextNode(state: State, x?: number, y?: number): void {
   state.nodes.push(node);
   state.selectedNode = node;
   state.mode = 'select';
+  state.nodeCreateAnimation = { nodeId: id, progress: 0 };
+  startNodeCreateAnimation();
   updatePropertiesPanel(state, _app);
   state.historyManager.save(state);
   render();
@@ -712,13 +831,39 @@ function addDotAtEdge(state: State): void {
 
 function deleteSelected(state: State): void {
   if (state.selectedNode) {
-    state.edges = state.edges.filter(e => e.fromNode !== state.selectedNode!.id && e.toNode !== state.selectedNode!.id);
-    state.nodes = state.nodes.filter(n => n.id !== state.selectedNode!.id);
+    const node = state.selectedNode;
+    const world = worldToScreen({ x: node.x, y: node.y }, state, _app.canvas);
+    const pixelSize = PIXEL_SIZE * state.zoom;
+    const dots: { x: number, y: number, vx: number, vy: number }[] = [];
+    for (let py = 0; py < node.height * state.zoom; py += pixelSize * 2) {
+      for (let px = 0; px < node.width * state.zoom; px += pixelSize * 2) {
+        if (Math.random() > 0.7) {
+          dots.push({
+            x: world.x + px,
+            y: world.y + py,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3 - 2
+          });
+        }
+      }
+    }
+    state.nodeDeleteAnimation = { node, progress: 0, dots };
+    startNodeDeleteAnimation();
+    state.edges = state.edges.filter(e => e.fromNode !== node.id && e.toNode !== node.id);
+    state.nodes = state.nodes.filter(n => n.id !== node.id);
     state.selectedNode = null;
     state.historyManager.save(state);
     render();
   } else if (state.selectedEdge) {
-    state.edges = state.edges.filter(e => e.id !== state.selectedEdge!.id);
+    const edge = state.selectedEdge;
+    state.edges = state.edges.filter(e => e.id !== edge.id);
+    state.edgeDeleteAnimation = {
+      fromNode: edge.fromNode,
+      toNode: edge.toNode,
+      progress: 0,
+      dots: []
+    };
+    startEdgeDeleteAnimation();
     state.selectedEdge = null;
     state.historyManager.save(state);
     render();
@@ -758,9 +903,10 @@ function addEdgeNode(state: State): void {
       arrowEnd: false
     };
     state.edges.push(edge);
+    state.edgeAnimation = { fromNode: fromNode.id, toNode: toNode.id, progress: 0 };
     state.selectedNodes = [];
     state.historyManager.save(state);
-    render();
+    startEdgeAnimation();
   } else {
     alert('SHIFT押しながら2つ、または1つのノードを選択してください');
   }
@@ -869,7 +1015,11 @@ function exportToPng(context: Context): void {
     colorPalettes: state.colorPalettes,
     selectedPaletteIndex: 0,
     editingPaletteIndex: undefined,
-    editingPaletteType: undefined
+    editingPaletteType: undefined,
+    edgeAnimation: null,
+    edgeDeleteAnimation: null,
+    nodeDeleteAnimation: null,
+    nodeCreateAnimation: null
   };
 
   tempState.nodes.forEach(n => {
@@ -898,9 +1048,6 @@ function loadFromFile(file: File, context: Context): void {
           const node: CanvasNode = { ...n };
           if (n.width <= 20 && n.height <= 20) {
             node.type = 'dot';
-            const oldSize = PIXEL_SIZE * 3;
-            node.width = oldSize;
-            node.height = oldSize;
             node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
           } else {
             node.type = n.type || 'text';
@@ -926,9 +1073,6 @@ function loadFromFile(file: File, context: Context): void {
   };
   reader.readAsText(file);
 }
-
-// Function moved to util.ts
-// function findPaletteIndex(palettes: string[], color: string | undefined): number
 
 function loadFromLocalStorage(state: State): void {
   const data = localStorage.getItem(STORAGE_KEYS.AUTOSAVE);
@@ -1090,33 +1234,21 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
         }
         state.selectedNode = null;
       } else {
-        if (e.shiftKey) {
-          if (state.selectedNode) {
-            if (!state.selectedNodes.includes(state.selectedNode)) {
-              state.selectedNodes.push(state.selectedNode);
-            }
-          }
-          if (!state.selectedNodes.includes(node)) {
-            state.selectedNodes.push(node);
-          }
-          state.selectedNode = null;
-        } else {
-          if (state.selectedNode && state.selectedNode !== node) {
-            state.lastSelectedNode = state.selectedNode;
-          } else if (!state.lastSelectedNode) {
-            state.lastSelectedNode = node;
-          }
-          state.selectedNodes = [];
-          state.selectedNode = node;
+        if (state.selectedNode && state.selectedNode !== node) {
+          state.lastSelectedNode = state.selectedNode;
+        } else if (!state.lastSelectedNode) {
+          state.lastSelectedNode = node;
         }
-        state.selectedEdge = null;
-        state.isDragging = true;
-        state.dragStart = { x: e.clientX, y: e.clientY };
-        state.dragOffset = {
-          x: world.x - node.x,
-          y: world.y - node.y
-        };
+        state.selectedNodes = [];
+        state.selectedNode = node;
       }
+      state.selectedEdge = null;
+      state.isDragging = true;
+      state.dragStart = { x: e.clientX, y: e.clientY };
+      state.dragOffset = {
+        x: world.x - node.x,
+        y: world.y - node.y
+      };
     }
   } else {
     const edge = findEdgeAt({ x, y }, context);
@@ -1395,6 +1527,99 @@ function initApp(context: Context): void {
     localStorage.removeItem(STORAGE_KEYS.DEV_MODE);
     location.reload();
   });
+}
+
+function startEdgeAnimation(): void {
+  if (!_state.edgeAnimation) return;
+  const animate = () => {
+    if (!_state.edgeAnimation) return;
+    _state.edgeAnimation.progress += 0.1;
+    if (_state.edgeAnimation.progress > 1) _state.edgeAnimation.progress = 1;
+    render();
+    if (_state.edgeAnimation && _state.edgeAnimation.progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      _state.edgeAnimation = null;
+    }
+  };
+  requestAnimationFrame(animate);
+}
+
+function startEdgeDeleteAnimation(): void {
+  if (!_state.edgeDeleteAnimation) return;
+  const fromNode = _state.nodes.find(n => n.id === _state.edgeDeleteAnimation?.fromNode);
+  const toNode = _state.nodes.find(n => n.id === _state.edgeDeleteAnimation?.toNode);
+  if (!fromNode || !toNode) return;
+  const fromPos = getRectEdgePoint(fromNode, toNode);
+  const toPos = getRectEdgePoint(toNode, fromNode);
+  const from = worldToScreen(fromPos, _state, _app.canvas);
+  const to = worldToScreen(toPos, _state, _app.canvas);
+  const pixelSize = PIXEL_SIZE * _state.zoom;
+  const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
+  const steps = Math.max(1, Math.floor(dist / pixelSize));
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    _state.edgeDeleteAnimation.dots.push({
+      x: from.x + dx * t,
+      y: from.y + dy * t,
+      vx: (Math.random() - 0.5) * 2,
+      vy: (Math.random() - 0.5) * 2
+    });
+  }
+
+  const animate = () => {
+    if (!_state.edgeDeleteAnimation) return;
+    _state.edgeDeleteAnimation.progress += 0.025;
+    _state.edgeDeleteAnimation.dots.forEach(dot => {
+      dot.x += dot.vx;
+      dot.y += dot.vy;
+      dot.vy += 0.1;
+    });
+    render();
+    if (_state.edgeDeleteAnimation.progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      _state.edgeDeleteAnimation = null;
+    }
+  };
+  requestAnimationFrame(animate);
+}
+
+function startNodeDeleteAnimation(): void {
+  if (!_state.nodeDeleteAnimation) return;
+  const animate = () => {
+    if (!_state.nodeDeleteAnimation) return;
+    _state.nodeDeleteAnimation.progress += 0.025;
+    _state.nodeDeleteAnimation.dots.forEach(dot => {
+      dot.x += dot.vx;
+      dot.y += dot.vy;
+      dot.vy += 0.15;
+    });
+    render();
+    if (_state.nodeDeleteAnimation.progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      _state.nodeDeleteAnimation = null;
+    }
+  };
+  requestAnimationFrame(animate);
+}
+
+function startNodeCreateAnimation(): void {
+  if (!_state.nodeCreateAnimation) return;
+  const animate = () => {
+    if (!_state.nodeCreateAnimation) return;
+    _state.nodeCreateAnimation.progress += 0.04;
+    render();
+    if (_state.nodeCreateAnimation.progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      _state.nodeCreateAnimation = null;
+    }
+  };
+  requestAnimationFrame(animate);
 }
 
 initApp(context);

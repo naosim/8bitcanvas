@@ -121,9 +121,6 @@
     ctx: document.getElementById("canvas").getContext("2d"),
     fileInput: document.getElementById("file-input")
   };
-  function getStrokeWidth(zoom) {
-    return 3 * zoom;
-  }
   var HistoryManager = class {
     constructor(maxSize = 50) {
       this.history = [];
@@ -216,6 +213,7 @@
   var HORIZONTAL_PADDING = 18;
   var VERTICAL_PADDING = 16;
   var LINE_HEIGHT = 18;
+  var PIXEL_SIZE = 4;
   function resizeCanvasWithRender(app) {
     resizeCanvas(app);
     render();
@@ -267,66 +265,86 @@
     ctx.lineTo(canvas.width, origin.y);
     ctx.stroke();
   }
+  function snapToPixel(val, pixelSize) {
+    return Math.round(val / pixelSize) * pixelSize;
+  }
+  function drawPixelRect(ctx, x, y, w, h, pixelSize, cornerSize = 0) {
+    for (let px = 0; px < w; px += pixelSize) {
+      if (cornerSize > 0 && (px < cornerSize || px >= w - cornerSize)) continue;
+      ctx.fillRect(x + px, y, pixelSize, pixelSize);
+      ctx.fillRect(x + px, y + h - pixelSize, pixelSize, pixelSize);
+    }
+    for (let py = pixelSize; py < h - pixelSize; py += pixelSize) {
+      ctx.fillRect(x, y + py, pixelSize, pixelSize);
+      ctx.fillRect(x + w - pixelSize, y + py, pixelSize, pixelSize);
+    }
+    if (cornerSize > 0) {
+      ctx.fillRect(x + pixelSize, y + pixelSize, pixelSize, pixelSize);
+      ctx.fillRect(x + w - pixelSize * 2, y + pixelSize, pixelSize, pixelSize);
+      ctx.fillRect(x + pixelSize, y + h - pixelSize * 2, pixelSize, pixelSize);
+      ctx.fillRect(x + w - pixelSize * 2, y + h - pixelSize * 2, pixelSize, pixelSize);
+    }
+  }
+  function fillPixelRect(ctx, x, y, w, h, pixelSize, cornerSize = 0) {
+    for (let py = 0; py < h; py += pixelSize) {
+      for (let px = 0; px < w; px += pixelSize) {
+        if (cornerSize > 0) {
+          const skipCorner = px < cornerSize && py < cornerSize || px >= w - cornerSize && py < cornerSize || px < cornerSize && py >= h - cornerSize || px >= w - cornerSize && py >= h - cornerSize;
+          if (skipCorner) continue;
+        }
+        ctx.fillRect(x + px, y + py, pixelSize, pixelSize);
+      }
+    }
+  }
+  function drawPixelCircle(ctx, cx, cy, radius, pixelSize) {
+    const r = Math.floor(radius / pixelSize) * pixelSize;
+    const px = Math.floor(r / pixelSize);
+    const pattern = [];
+    for (let y = -px; y <= px; y++) {
+      const row = [];
+      for (let x = -px; x <= px; x++) {
+        const dist = Math.sqrt(x * x + y * y);
+        row.push(dist <= px);
+      }
+      pattern.push(row);
+    }
+    const offsetX = Math.floor(cx / pixelSize) * pixelSize;
+    const offsetY = Math.floor(cy / pixelSize) * pixelSize;
+    for (let y = 0; y < pattern.length; y++) {
+      for (let x = 0; x < pattern[y].length; x++) {
+        if (pattern[y][x]) {
+          ctx.fillRect(offsetX + x * pixelSize, offsetY + y * pixelSize, pixelSize, pixelSize);
+        }
+      }
+    }
+  }
   function drawNode(node, context2) {
     const { state, app } = context2;
     const { ctx, canvas } = app;
+    const pixelSize = PIXEL_SIZE * state.zoom;
     const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
-    const w = node.width * state.zoom;
-    const h = node.height * state.zoom;
+    let w = node.width * state.zoom;
+    let h = node.height * state.zoom;
+    w = snapToPixel(w, pixelSize) || pixelSize;
+    h = snapToPixel(h, pixelSize) || pixelSize;
+    const snappedX = snapToPixel(pos.x, pixelSize);
+    const snappedY = snapToPixel(pos.y, pixelSize);
     const isSelected = state.selectedNode?.id === node.id || state.selectedNodes.includes(node);
-    if (pos.x + w < 0 || pos.x > canvas.width || pos.y + h < 0 || pos.y > canvas.height) {
+    if (snappedX + w < 0 || snappedX > canvas.width || snappedY + h < 0 || snappedY > canvas.height) {
       return;
     }
     if (node.type === "text") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#4444aa";
       const bgTransparent = node.bgTransparent;
       const strokeTransparent = node.strokeTransparent;
-      const r = 4 * state.zoom;
       if (!bgTransparent) {
         ctx.fillStyle = bgHex;
-        ctx.beginPath();
-        ctx.moveTo(pos.x + r, pos.y);
-        ctx.lineTo(pos.x + w - r, pos.y);
-        ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
-        ctx.lineTo(pos.x + w, pos.y + h - r);
-        ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
-        ctx.lineTo(pos.x + r, pos.y + h);
-        ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
-        ctx.lineTo(pos.x, pos.y + r);
-        ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
-        ctx.closePath();
-        ctx.fill();
+        fillPixelRect(ctx, snappedX, snappedY, w, h, pixelSize, pixelSize);
       }
-      if (isSelected) {
-        ctx.strokeStyle = "#ffff00";
-        ctx.lineWidth = getStrokeWidth(state.zoom);
-        ctx.beginPath();
-        ctx.moveTo(pos.x + r, pos.y);
-        ctx.lineTo(pos.x + w - r, pos.y);
-        ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
-        ctx.lineTo(pos.x + w, pos.y + h - r);
-        ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
-        ctx.lineTo(pos.x + r, pos.y + h);
-        ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
-        ctx.lineTo(pos.x, pos.y + r);
-        ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
-        ctx.closePath();
-        ctx.stroke();
-      } else if (!strokeTransparent) {
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = getStrokeWidth(state.zoom);
-        ctx.beginPath();
-        ctx.moveTo(pos.x + r, pos.y);
-        ctx.lineTo(pos.x + w - r, pos.y);
-        ctx.quadraticCurveTo(pos.x + w, pos.y, pos.x + w, pos.y + r);
-        ctx.lineTo(pos.x + w, pos.y + h - r);
-        ctx.quadraticCurveTo(pos.x + w, pos.y + h, pos.x + w - r, pos.y + h);
-        ctx.lineTo(pos.x + r, pos.y + h);
-        ctx.quadraticCurveTo(pos.x, pos.y + h, pos.x, pos.y + h - r);
-        ctx.lineTo(pos.x, pos.y + r);
-        ctx.quadraticCurveTo(pos.x, pos.y, pos.x + r, pos.y);
-        ctx.closePath();
-        ctx.stroke();
+      const strokeColor = isSelected ? "#ffff00" : "#ffffff";
+      if (isSelected || !strokeTransparent) {
+        ctx.fillStyle = strokeColor;
+        drawPixelRect(ctx, snappedX, snappedY, w, h, pixelSize, pixelSize);
       }
       if (node.text && state.zoom > 0.3) {
         const lines = node.text.split("\n");
@@ -349,13 +367,13 @@
         } else if (valign === "bottom") {
           textY = h - totalTextHeight + baselineOffset;
         }
-        const startY = pos.y + textY;
+        const startY = snappedY + textY;
         lines.forEach((line, i) => {
-          let x = pos.x + HORIZONTAL_PADDING / 2;
+          let x = snappedX + HORIZONTAL_PADDING / 2;
           if (align === "center") {
-            x = pos.x + w / 2;
+            x = snappedX + w / 2;
           } else if (align === "right") {
-            x = pos.x + w - HORIZONTAL_PADDING / 2;
+            x = snappedX + w - HORIZONTAL_PADDING / 2;
           }
           const y = startY + i * lineHeight;
           if (align === "center") {
@@ -374,17 +392,13 @@
     } else if (node.type === "circle") {
       const bgHex = state.colorPalettes[node.bgPaletteIndex] || "#44aa44";
       const bgTransparent = node.bgTransparent;
+      const strokeColor = isSelected ? "#ffff00" : "#ffffff";
       if (!bgTransparent) {
         ctx.fillStyle = bgHex;
-        ctx.beginPath();
-        ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
-        ctx.fill();
+        drawPixelCircle(ctx, snappedX + w / 2, snappedY + h / 2, w / 2, pixelSize);
       }
-      ctx.strokeStyle = isSelected ? "#ffff00" : "#ffffff";
-      ctx.lineWidth = getStrokeWidth(state.zoom);
-      ctx.beginPath();
-      ctx.arc(pos.x + w / 2, pos.y + h / 2, w / 2, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.fillStyle = strokeColor;
+      drawPixelCircle(ctx, snappedX + w / 2, snappedY + h / 2, w / 2, pixelSize);
     }
   }
   function drawEdge(edge, context2) {
@@ -412,27 +426,42 @@
     if (maxX < 0 || minX > canvas.width || maxY < 0 || minY > canvas.height) {
       return;
     }
-    ctx.strokeStyle = state.selectedEdge?.id === edge.id ? "#ffff00" : "#ffffff";
-    ctx.lineWidth = getStrokeWidth(state.zoom);
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-    function drawArrow(from2, to2) {
-      const arrowAngle = Math.atan2(to2.y - from2.y, to2.x - from2.x);
-      const arrowLen = getStrokeWidth(state.zoom) * 4;
-      ctx.beginPath();
-      ctx.moveTo(to2.x, to2.y);
-      ctx.lineTo(to2.x - arrowLen * Math.cos(arrowAngle - Math.PI / 6), to2.y - arrowLen * Math.sin(arrowAngle - Math.PI / 6));
-      ctx.moveTo(to2.x, to2.y);
-      ctx.lineTo(to2.x - arrowLen * Math.cos(arrowAngle + Math.PI / 6), to2.y - arrowLen * Math.sin(arrowAngle + Math.PI / 6));
-      ctx.stroke();
+    const pixelSize = PIXEL_SIZE * state.zoom;
+    const strokeColor = state.selectedEdge?.id === edge.id ? "#ffff00" : "#ffffff";
+    ctx.fillStyle = strokeColor;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.floor(len / pixelSize);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = snapToPixel(from.x + dx * t, pixelSize);
+      const y = snapToPixel(from.y + dy * t, pixelSize);
+      ctx.fillRect(x, y, pixelSize, pixelSize);
+    }
+    function drawPixelArrowHead(from2, to2, pixelSize2) {
+      const dx2 = to2.x - from2.x;
+      const dy2 = to2.y - from2.y;
+      const angle = Math.atan2(dy2, dx2);
+      const arrowLen = pixelSize2 * 3;
+      const arrowAngle = Math.PI / 6;
+      const baseX = to2.x - arrowLen * Math.cos(angle);
+      const baseY = to2.y - arrowLen * Math.sin(angle);
+      const leftX = to2.x - arrowLen * Math.cos(angle - arrowAngle);
+      const leftY = to2.y - arrowLen * Math.sin(angle - arrowAngle);
+      const rightX = to2.x - arrowLen * Math.cos(angle + arrowAngle);
+      const rightY = to2.y - arrowLen * Math.sin(angle + arrowAngle);
+      for (let t = 0; t <= 1; t += 0.2) {
+        ctx.fillRect(snapToPixel(baseX + (leftX - baseX) * t, pixelSize2), snapToPixel(baseY + (leftY - baseY) * t, pixelSize2), pixelSize2, pixelSize2);
+        ctx.fillRect(snapToPixel(baseX + (rightX - baseX) * t, pixelSize2), snapToPixel(baseY + (rightY - baseY) * t, pixelSize2), pixelSize2, pixelSize2);
+      }
+      ctx.fillRect(snapToPixel(to2.x, pixelSize2), snapToPixel(to2.y, pixelSize2), pixelSize2, pixelSize2);
     }
     if (edge.arrowStart) {
-      drawArrow(to, from);
+      drawPixelArrowHead(to, from, pixelSize);
     }
     if (edge.arrowEnd) {
-      drawArrow(from, to);
+      drawPixelArrowHead(from, to, pixelSize);
     }
   }
   function renderFull(context2) {

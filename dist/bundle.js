@@ -68,6 +68,9 @@
       if (t1 > tMin && t1 < 1) t = Math.min(t, t1);
       if (t2 > tMin && t2 < 1) t = Math.min(t, t2);
     }
+    if (t === Infinity) {
+      return from;
+    }
     return {
       x: from.x + dx * t,
       y: from.y + dy * t
@@ -261,21 +264,18 @@
   function snapToPixel(val, pixelSize) {
     return Math.round(val / pixelSize) * pixelSize;
   }
-  function drawPixelRect(ctx, x, y, w, h, pixelSize, cornerSize = 0) {
-    for (let px = 0; px < w; px += pixelSize) {
-      if (cornerSize > 0 && (px < cornerSize || px >= w - cornerSize)) continue;
-      ctx.fillRect(x + px, y, pixelSize, pixelSize);
-      ctx.fillRect(x + px, y + h - pixelSize, pixelSize, pixelSize);
-    }
-    for (let py = pixelSize; py < h - pixelSize; py += pixelSize) {
-      ctx.fillRect(x, y + py, pixelSize, pixelSize);
-      ctx.fillRect(x + w - pixelSize, y + py, pixelSize, pixelSize);
-    }
-    if (cornerSize > 0) {
-      ctx.fillRect(x + pixelSize, y + pixelSize, pixelSize, pixelSize);
-      ctx.fillRect(x + w - pixelSize * 2, y + pixelSize, pixelSize, pixelSize);
-      ctx.fillRect(x + pixelSize, y + h - pixelSize * 2, pixelSize, pixelSize);
-      ctx.fillRect(x + w - pixelSize * 2, y + h - pixelSize * 2, pixelSize, pixelSize);
+  function drawPixelRect(ctx, x, y, w, h, pixelSize, hasCorner = false) {
+    if (hasCorner) {
+      const cs = pixelSize;
+      ctx.fillRect(x + cs, y, w - cs * 2, pixelSize);
+      ctx.fillRect(x + cs, y + h - pixelSize, w - cs * 2, pixelSize);
+      ctx.fillRect(x, y + cs, pixelSize, h - cs * 2);
+      ctx.fillRect(x + w - pixelSize, y + cs, pixelSize, h - cs * 2);
+    } else {
+      ctx.fillRect(x, y, w, pixelSize);
+      ctx.fillRect(x, y + h - pixelSize, w, pixelSize);
+      ctx.fillRect(x, y, pixelSize, h);
+      ctx.fillRect(x + w - pixelSize, y, pixelSize, h);
     }
   }
   function drawNode(node, context2) {
@@ -305,12 +305,12 @@
     const strokeTransparent = node.strokeTransparent;
     if (!bgTransparent) {
       ctx.fillStyle = bgHex;
-      ctx.fillRect(x, y, w, h);
+      ctx.fillRect(x + pixelSize, y + pixelSize, w - pixelSize * 2, h - pixelSize * 2);
     }
     const strokeColor = isSelected ? "#ffff00" : "#ffffff";
     if (isSelected || !strokeTransparent) {
       ctx.fillStyle = strokeColor;
-      drawPixelRect(ctx, x, y, w, h, pixelSize, pixelSize);
+      drawPixelRect(ctx, x, y, w, h, pixelSize, true);
     }
     if (node.text && zoom > 0.3) {
       const lines = node.text.split("\n");
@@ -372,18 +372,11 @@
     const fromNode = state.nodes.find((n) => n.id === edge.fromNode);
     const toNode = state.nodes.find((n) => n.id === edge.toNode);
     if (!fromNode || !toNode) return;
-    const fromCenter = {
-      x: fromNode.x + fromNode.width / 2,
-      y: fromNode.y + fromNode.height / 2
-    };
-    const toCenter = {
-      x: toNode.x + toNode.width / 2,
-      y: toNode.y + toNode.height / 2
-    };
     const fromEdgePoint = getRectEdgePoint(fromNode, toNode);
     const toEdgePoint = getRectEdgePoint(toNode, fromNode);
     const from = worldToScreen({ x: fromEdgePoint.x, y: fromEdgePoint.y }, context2.state, canvas);
     const to = worldToScreen({ x: toEdgePoint.x, y: toEdgePoint.y }, context2.state, canvas);
+    if (from.x === to.x && from.y === to.y) return;
     const minX = Math.min(from.x, to.x);
     const maxX = Math.max(from.x, to.x);
     const minY = Math.min(from.y, to.y);
@@ -393,11 +386,11 @@
     }
     const pixelSize = PIXEL_SIZE * state.zoom;
     const strokeColor = state.selectedEdge?.id === edge.id ? "#ffff00" : "#ffffff";
+    const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
+    const steps = Math.max(1, Math.floor(dist / pixelSize));
     ctx.fillStyle = strokeColor;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const steps = Math.floor(len / pixelSize);
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const x = snapToPixel(from.x + dx * t, pixelSize);

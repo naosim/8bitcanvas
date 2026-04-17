@@ -101,6 +101,10 @@ export function getRectEdgePoint(node: Figure, toNode: Figure): Point {
     if (t2 > tMin && t2 < 1) t = Math.min(t, t2);
   }
 
+  if (t === Infinity) {
+    return from;
+  }
+
   return {
     x: from.x + dx * t,
     y: from.y + dy * t

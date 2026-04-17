@@ -370,7 +370,8 @@ function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number
     const align = node.textAlign || 'left';
     const valign = node.textValign || 'top';
     ctx.fillStyle = '#ffffff';
-    ctx.font = `${14 * zoom}px 'DotGothic16'`;
+    const FONT_SIZE = 16;
+    ctx.font = `${FONT_SIZE * zoom}px 'DotGothic16'`;
 
     const verticalPadding = VERTICAL_PADDING * zoom;
     const verticalPaddingTop = verticalPadding / 2;

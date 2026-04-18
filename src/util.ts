@@ -10,8 +10,12 @@ export interface Size {
   height: number;
 }
 
-export interface Figure extends Point, Size {
+export interface Figure {
   type: 'text' | 'dot' | 'circle';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export function rgbaToHex(rgba: string): string {

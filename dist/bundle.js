@@ -111,6 +111,11 @@
     AUTOSAVE: "tinytidycanvas-autosave",
     DEV_MODE: "tinytidycanvas-dev"
   };
+  var TEXT_NODE_DEFAULT = {
+    width: 120,
+    height: 60
+  };
+  var NEW_CANVAS_INITIAL_OFFSET = 30;
   var _app = {
     document,
     canvas: document.getElementById("canvas"),
@@ -558,10 +563,10 @@
     const textA = {
       id: "node-start",
       type: "text",
-      x: -150,
-      y: -30,
-      width: 120,
-      height: 60,
+      x: -TEXT_NODE_DEFAULT.width / 2 - NEW_CANVAS_INITIAL_OFFSET,
+      y: -TEXT_NODE_DEFAULT.height / 2,
+      width: TEXT_NODE_DEFAULT.width,
+      height: TEXT_NODE_DEFAULT.height,
       text: "\u30C6\u30AD\u30B9\u30C8A",
       textAlign: "center",
       textValign: "middle",
@@ -573,10 +578,10 @@
     const textB = {
       id: "node-end",
       type: "text",
-      x: 30,
-      y: -30,
-      width: 120,
-      height: 60,
+      x: TEXT_NODE_DEFAULT.width / 2 - NEW_CANVAS_INITIAL_OFFSET,
+      y: -TEXT_NODE_DEFAULT.height / 2,
+      width: TEXT_NODE_DEFAULT.width,
+      height: TEXT_NODE_DEFAULT.height,
       text: "\u30C6\u30AD\u30B9\u30C8B",
       textAlign: "center",
       textValign: "middle",
@@ -602,15 +607,25 @@
     render();
     updatePropertiesPanel(state, _app);
   }
-  function addTextNode(state, x, y) {
+  function addTextNode(state, x, y, app) {
     const id = "node-" + Date.now();
+    let nodeX = 0;
+    let nodeY = 0;
+    if (x !== void 0 && y !== void 0) {
+      nodeX = x;
+      nodeY = y;
+    } else if (app) {
+      const world = screenToWorld({ x: app.canvas.width / 2, y: app.canvas.height / 2 }, state, app.canvas);
+      nodeX = world.x;
+      nodeY = world.y;
+    }
     const node = {
       id,
       type: "text",
-      x: x !== void 0 ? x : -50,
-      y: y !== void 0 ? y : -50,
-      width: 120,
-      height: 60,
+      x: nodeX - TEXT_NODE_DEFAULT.width / 2,
+      y: nodeY - TEXT_NODE_DEFAULT.height / 2,
+      width: TEXT_NODE_DEFAULT.width,
+      height: TEXT_NODE_DEFAULT.height,
       text: "\u30C6\u30AD\u30B9\u30C8",
       textAlign: "left",
       textValign: "top",
@@ -628,14 +643,24 @@
     state.historyManager.save(state);
     render();
   }
-  function addDotNode(state) {
+  function addDotNode(state, x, y, app) {
     const id = "node-" + Date.now();
     const size = PIXEL_SIZE * 3;
+    let nodeX = 0;
+    let nodeY = 0;
+    if (x !== void 0 && y !== void 0) {
+      nodeX = x;
+      nodeY = y;
+    } else if (app) {
+      const world = screenToWorld({ x: app.canvas.width / 2, y: app.canvas.height / 2 }, state, app.canvas);
+      nodeX = world.x;
+      nodeY = world.y;
+    }
     const node = {
       id,
       type: "dot",
-      x: 0,
-      y: 0,
+      x: nodeX - size / 2,
+      y: nodeY - size / 2,
       width: size,
       height: size,
       bgPaletteIndex: 4,
@@ -1229,8 +1254,8 @@
     canvas.addEventListener("mouseup", () => handleMouseUp(context2));
     canvas.addEventListener("wheel", (e) => handleWheel(e, context2));
     app.document.getElementById("btn-new").addEventListener("click", () => createNew(_state));
-    app.document.getElementById("btn-add-text").addEventListener("click", () => addTextNode(_state));
-    app.document.getElementById("btn-add-dot").addEventListener("click", () => addDotNode(_state));
+    app.document.getElementById("btn-add-text").addEventListener("click", () => addTextNode(_state, void 0, void 0, _app));
+    app.document.getElementById("btn-add-dot").addEventListener("click", () => addDotNode(_state, void 0, void 0, _app));
     app.document.getElementById("btn-add-edge").addEventListener("click", () => addEdgeNode(_state));
     app.document.getElementById("btn-undo").addEventListener("click", () => undo(_state));
     app.document.getElementById("btn-redo").addEventListener("click", () => redo(_state));

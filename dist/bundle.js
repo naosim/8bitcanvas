@@ -248,20 +248,15 @@
     const gridSize = 32 * state.zoom;
     const offsetX = state.offset.x % gridSize;
     const offsetY = state.offset.y % gridSize;
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
+    const pixelSize = PIXEL_SIZE * state.zoom;
+    ctx.fillStyle = "#333333";
     for (let x = offsetX; x < canvas.width; x += gridSize) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      for (let y = offsetY; y < canvas.height; y += gridSize) {
+        ctx.fillRect(x, y, pixelSize, pixelSize);
+      }
     }
-    for (let y = offsetY; y < canvas.height; y += gridSize) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-    }
-    ctx.stroke();
     const origin = worldToScreen({ x: 0, y: 0 }, state, canvas);
-    ctx.strokeStyle = "#666";
+    ctx.strokeStyle = "#666666";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(origin.x, 0);

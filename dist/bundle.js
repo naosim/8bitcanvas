@@ -619,6 +619,8 @@
       nodeX = world.x;
       nodeY = world.y;
     }
+    nodeX = snapToPixel(nodeX, PIXEL_SIZE);
+    nodeY = snapToPixel(nodeY, PIXEL_SIZE);
     const node = {
       id,
       type: "text",
@@ -656,6 +658,8 @@
       nodeX = world.x;
       nodeY = world.y;
     }
+    nodeX = snapToPixel(nodeX, PIXEL_SIZE);
+    nodeY = snapToPixel(nodeY, PIXEL_SIZE);
     const node = {
       id,
       type: "dot",

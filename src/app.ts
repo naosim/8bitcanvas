@@ -741,6 +741,8 @@ function addTextNode(state: State, x?: number, y?: number, app?: App): void {
     nodeX = world.x;
     nodeY = world.y;
   }
+  nodeX = snapToPixel(nodeX, PIXEL_SIZE);
+  nodeY = snapToPixel(nodeY, PIXEL_SIZE);
   const node: CanvasNode = {
     id,
     type: 'text',
@@ -779,6 +781,8 @@ function addDotNode(state: State, x?: number, y?: number, app?: App): void {
     nodeX = world.x;
     nodeY = world.y;
   }
+  nodeX = snapToPixel(nodeX, PIXEL_SIZE);
+  nodeY = snapToPixel(nodeY, PIXEL_SIZE);
   const node: CanvasNode = {
     id,
     type: 'dot',

@@ -94,6 +94,7 @@ Obsidian Canvas形式
 - TypeScript で実装
 - コンパイル: `npm run build` → `dist/app.js`
 - 厳格なタイプチェック (strict mode)
+- **ビルド前に `tsc --noEmit` で型チェックを毎回実行**
 
 ### 変数宣言
 - `const` を優先し、`let` は再代入が必要な場合のみ使用

@@ -115,7 +115,11 @@
     width: 120,
     height: 60
   };
-  var NEW_CANVAS_INITIAL_OFFSET = 30;
+  var HORIZONTAL_PADDING = 18;
+  var VERTICAL_PADDING = 16;
+  var LINE_HEIGHT = 18;
+  var PIXEL_SIZE = 4;
+  var NEW_CANVAS_INITIAL_OFFSET = PIXEL_SIZE * 16;
   var _app = {
     document,
     canvas: document.getElementById("canvas"),
@@ -212,13 +216,25 @@
     edgeAnimation: null,
     edgeDeleteAnimation: null,
     nodeDeleteAnimation: null,
-    nodeCreateAnimation: null
+    nodeCreateAnimation: null,
+    fileHandle: null
   };
   var context = { state: _state, app: _app };
-  var HORIZONTAL_PADDING = 18;
-  var VERTICAL_PADDING = 16;
-  var LINE_HEIGHT = 18;
-  var PIXEL_SIZE = 4;
+  function findFreePosition(state, x, y, width, height) {
+    const offset = PIXEL_SIZE * 8;
+    const maxAttempts = 20;
+    for (let i = 0; i < maxAttempts; i++) {
+      const checkX = x - width / 2 + i % 5 * offset * Math.floor(i / 5);
+      const checkY = y - height / 2 + Math.floor(i / 5) * offset;
+      const occupied = state.nodes.some((n) => {
+        return !(checkX + width < n.x || checkX > n.x + n.width || checkY + height < n.y || checkY > n.y + n.height);
+      });
+      if (!occupied) {
+        return { x: checkX, y: checkY };
+      }
+    }
+    return { x: x - width / 2, y: y - height / 2 };
+  }
   function resizeCanvasWithRender(app) {
     resizeCanvas(app);
     render();
@@ -555,6 +571,7 @@
     state.mode = "select";
     state.zoom = 1;
     state.offset = { x: 0, y: 0 };
+    state.fileHandle = null;
     const textA = {
       id: "node-start",
       type: "text",
@@ -573,7 +590,7 @@
     const textB = {
       id: "node-end",
       type: "text",
-      x: TEXT_NODE_DEFAULT.width / 2 - NEW_CANVAS_INITIAL_OFFSET,
+      x: TEXT_NODE_DEFAULT.width / 2 + NEW_CANVAS_INITIAL_OFFSET,
       y: -TEXT_NODE_DEFAULT.height / 2,
       width: TEXT_NODE_DEFAULT.width,
       height: TEXT_NODE_DEFAULT.height,
@@ -614,8 +631,9 @@
       nodeX = world.x;
       nodeY = world.y;
     }
-    nodeX = snapToPixel(nodeX, PIXEL_SIZE);
-    nodeY = snapToPixel(nodeY, PIXEL_SIZE);
+    const pos = findFreePosition(state, nodeX, nodeY, TEXT_NODE_DEFAULT.width, TEXT_NODE_DEFAULT.height);
+    nodeX = snapToPixel(pos.x, PIXEL_SIZE);
+    nodeY = snapToPixel(pos.y, PIXEL_SIZE);
     const node = {
       id,
       type: "text",
@@ -653,8 +671,9 @@
       nodeX = world.x;
       nodeY = world.y;
     }
-    nodeX = snapToPixel(nodeX, PIXEL_SIZE);
-    nodeY = snapToPixel(nodeY, PIXEL_SIZE);
+    const pos = findFreePosition(state, nodeX, nodeY, size, size);
+    nodeX = snapToPixel(pos.x, PIXEL_SIZE);
+    nodeY = snapToPixel(pos.y, PIXEL_SIZE);
     const node = {
       id,
       type: "dot",
@@ -841,9 +860,34 @@
     };
     return JSON.stringify(data, null, 2);
   }
-  function saveToFile(context2) {
+  async function saveToFile(context2) {
     const { state } = context2;
     const data = exportToObsidianCanvas(state);
+    if ("showSaveFilePicker" in window) {
+      try {
+        if (state.fileHandle) {
+          const writable2 = await state.fileHandle.createWritable();
+          await writable2.write(data);
+          await writable2.close();
+          localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+          return;
+        }
+        const handle = await window.showSaveFilePicker({
+          types: [{
+            description: "Canvas File",
+            accept: { "application/json": [".json", ".canvas"] }
+          }]
+        });
+        state.fileHandle = handle;
+        const writable = await handle.createWritable();
+        await writable.write(data);
+        await writable.close();
+        localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;
+      }
+    }
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = _app.document.createElement("a");
@@ -905,7 +949,8 @@
       edgeAnimation: null,
       edgeDeleteAnimation: null,
       nodeDeleteAnimation: null,
-      nodeCreateAnimation: null
+      nodeCreateAnimation: null,
+      fileHandle: null
     };
     tempState.nodes.forEach((n) => {
       drawNode(n, { state: tempState, app: tempApp });
@@ -919,42 +964,54 @@
     a.download = "canvas.png";
     a.click();
   }
-  function loadFromFile(file, context2) {
-    const { state, app } = context2;
-    const { ctx, canvas } = app;
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  async function loadFromFile(context2) {
+    const { state } = context2;
+    if ("showOpenFilePicker" in window) {
       try {
-        const data = JSON.parse(e.target.result);
-        if (data.nodes) {
-          state.nodes = data.nodes.map((n) => {
-            const node = { ...n };
-            if (n.width <= 20 && n.height <= 20) {
-              node.type = "dot";
-              node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-            } else {
-              node.type = n.type || "text";
-              node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-            }
-            node.bgTransparent = n.bgTransparent || false;
-            node.autoResize = n.autoResize !== void 0 ? n.autoResize : true;
-            return node;
-          });
-        }
-        if (data.edges) state.edges = data.edges;
-        if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-        if (data.viewport) {
-          state.zoom = data.viewport.zoom || 1;
-          state.offset.x = -data.viewport.x * state.zoom;
-          state.offset.y = -data.viewport.y * state.zoom;
-        }
-        state.historyManager.save(state);
-        render();
+        const [handle] = await window.showOpenFilePicker({
+          types: [{
+            description: "Canvas File",
+            accept: { "application/json": [".json", ".canvas"] }
+          }]
+        });
+        state.fileHandle = handle;
+        const f = await handle.getFile();
+        const data = await f.text();
+        const parsed = JSON.parse(data);
+        loadFromJson(parsed, context2);
+        return;
       } catch (err) {
-        alert("\u30D5\u30A1\u30A4\u30EB\u306E\u5F62\u5F0F\u304C\u6B63\u3057\u304F\u3042\u308A\u307E\u305B\u3093");
+        if (err.name === "AbortError") return;
       }
-    };
-    reader.readAsText(file);
+    }
+    _app.fileInput.click();
+  }
+  function loadFromJson(data, context2) {
+    const { state } = context2;
+    if (data.nodes) {
+      state.nodes = data.nodes.map((n) => {
+        const node = { ...n };
+        if (n.width <= 20 && n.height <= 20) {
+          node.type = "dot";
+          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+        } else {
+          node.type = n.type || "text";
+          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+        }
+        node.bgTransparent = n.bgTransparent || false;
+        node.autoResize = n.autoResize !== void 0 ? n.autoResize : true;
+        return node;
+      });
+    }
+    if (data.edges) state.edges = data.edges;
+    if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
+    if (data.viewport) {
+      state.zoom = data.viewport.zoom || 1;
+      state.offset.x = -data.viewport.x * state.zoom;
+      state.offset.y = -data.viewport.y * state.zoom;
+    }
+    state.historyManager.save(state);
+    render();
   }
   function loadFromLocalStorage(state) {
     const data = localStorage.getItem(STORAGE_KEYS.AUTOSAVE);
@@ -1310,7 +1367,7 @@
     app.document.getElementById("btn-back").addEventListener("click", () => sendToBack(_state));
     app.document.getElementById("btn-add-dot-to-edge").addEventListener("click", () => addDotAtEdge(_state));
     app.document.getElementById("btn-save").addEventListener("click", () => saveToFile(context2));
-    app.document.getElementById("btn-load").addEventListener("click", () => fileInput.click());
+    app.document.getElementById("btn-load").addEventListener("click", () => loadFromFile(context2));
     app.document.getElementById("btn-log").addEventListener("click", () => {
       const data = exportToObsidianCanvas(context2.state);
       console.log(data);
@@ -1320,7 +1377,19 @@
     });
     fileInput.addEventListener("change", (e) => {
       const target = e.target;
-      if (target.files && target.files[0]) loadFromFile(target.files[0], context2);
+      if (target.files && target.files[0]) {
+        const file = target.files[0];
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            loadFromJson(parsed, context2);
+          } catch (err) {
+            alert("\u30D5\u30A1\u30A4\u30EB\u306E\u5F62\u5F0F\u304C\u6B63\u3057\u304F\u3042\u308A\u307E\u305B\u3093");
+          }
+        };
+        reader.readAsText(file);
+      }
     });
     app.document.addEventListener("keydown", (e) => handleKeyDown(e, context2));
     window.addEventListener("resize", () => resizeCanvasWithRender(_app));

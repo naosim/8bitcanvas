@@ -22,8 +22,13 @@ const TEXT_NODE_DEFAULT = {
   height: 60
 } as const;
 
+const HORIZONTAL_PADDING = 18;
+const VERTICAL_PADDING = 16;
+const LINE_HEIGHT = 18;
+const PIXEL_SIZE = 4;
+
 /** 新規作成時の2つのテキストノードを中央から左右に離すオフセット */
-const NEW_CANVAS_INITIAL_OFFSET = 30;
+const NEW_CANVAS_INITIAL_OFFSET = PIXEL_SIZE * 16;
 
 interface CanvasNode extends Figure {
   id: string;
@@ -72,6 +77,7 @@ interface State {
   edgeDeleteAnimation: { fromNode: string, toNode: string, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
   nodeDeleteAnimation: { node: CanvasNode, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
   nodeCreateAnimation: { nodeId: string, progress: number } | null;
+  fileHandle: FileSystemFileHandle | null;
 }
 
 interface App {
@@ -187,18 +193,32 @@ const _state: State = {
   edgeAnimation: null,
   edgeDeleteAnimation: null,
   nodeDeleteAnimation: null,
-  nodeCreateAnimation: null
+  nodeCreateAnimation: null,
+  fileHandle: null
 };
 
 const context: Context = { state: _state, app: _app };
 
-
-
-
-const HORIZONTAL_PADDING = 18;
-const VERTICAL_PADDING = 16;
-const LINE_HEIGHT = 18;
-const PIXEL_SIZE = 4;
+function findFreePosition(state: State, x: number, y: number, width: number, height: number): Point {
+  const offset = PIXEL_SIZE * 8;
+  const maxAttempts = 20;
+  
+  for (let i = 0; i < maxAttempts; i++) {
+    const checkX = x - width / 2 + (i % 5) * offset * Math.floor(i / 5);
+    const checkY = y - height / 2 + Math.floor(i / 5) * offset;
+    
+    const occupied = state.nodes.some(n => {
+      return !(checkX + width < n.x || checkX > n.x + n.width ||
+               checkY + height < n.y || checkY > n.y + n.height);
+    });
+    
+    if (!occupied) {
+      return { x: checkX, y: checkY };
+    }
+  }
+  
+  return { x: x - width / 2, y: y - height / 2 };
+}
 
 function resizeCanvasWithRender(app: App) {
   resizeCanvas(app);
@@ -674,6 +694,7 @@ function createNew(state: State): void {
   state.mode = 'select';
   state.zoom = 1;
   state.offset = { x: 0, y: 0 };
+  state.fileHandle = null;
 
   const textA: CanvasNode = {
     id: 'node-start',
@@ -693,7 +714,7 @@ function createNew(state: State): void {
   const textB: CanvasNode = {
     id: 'node-end',
     type: 'text',
-    x: TEXT_NODE_DEFAULT.width / 2 - NEW_CANVAS_INITIAL_OFFSET,
+    x: TEXT_NODE_DEFAULT.width / 2 + NEW_CANVAS_INITIAL_OFFSET,
     y: -TEXT_NODE_DEFAULT.height / 2,
     width: TEXT_NODE_DEFAULT.width,
     height: TEXT_NODE_DEFAULT.height,
@@ -736,8 +757,9 @@ function addTextNode(state: State, x?: number, y?: number, app?: App): void {
     nodeX = world.x;
     nodeY = world.y;
   }
-  nodeX = snapToPixel(nodeX, PIXEL_SIZE);
-  nodeY = snapToPixel(nodeY, PIXEL_SIZE);
+  const pos = findFreePosition(state, nodeX, nodeY, TEXT_NODE_DEFAULT.width, TEXT_NODE_DEFAULT.height);
+  nodeX = snapToPixel(pos.x, PIXEL_SIZE);
+  nodeY = snapToPixel(pos.y, PIXEL_SIZE);
   const node: CanvasNode = {
     id,
     type: 'text',
@@ -776,8 +798,9 @@ function addDotNode(state: State, x?: number, y?: number, app?: App): void {
     nodeX = world.x;
     nodeY = world.y;
   }
-  nodeX = snapToPixel(nodeX, PIXEL_SIZE);
-  nodeY = snapToPixel(nodeY, PIXEL_SIZE);
+  const pos = findFreePosition(state, nodeX, nodeY, size, size);
+  nodeX = snapToPixel(pos.x, PIXEL_SIZE);
+  nodeY = snapToPixel(pos.y, PIXEL_SIZE);
   const node: CanvasNode = {
     id,
     type: 'dot',
@@ -977,9 +1000,36 @@ function exportToObsidianCanvas(state: State): string {
   return JSON.stringify(data, null, 2);
 }
 
-function saveToFile(context: Context): void {
+async function saveToFile(context: Context): Promise<void> {
   const { state } = context;
   const data = exportToObsidianCanvas(state);
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      if (state.fileHandle) {
+        const writable = await state.fileHandle.createWritable();
+        await writable.write(data);
+        await writable.close();
+        localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+        return;
+      }
+      const handle = await (window as any).showSaveFilePicker({
+        types: [{
+          description: 'Canvas File',
+          accept: { 'application/json': ['.json', '.canvas'] }
+        }]
+      });
+      state.fileHandle = handle;
+      const writable = await handle.createWritable();
+      await writable.write(data);
+      await writable.close();
+      localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+      return;
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+    }
+  }
+
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = _app.document.createElement('a');
@@ -1050,7 +1100,8 @@ function exportToPng(context: Context): void {
     edgeAnimation: null,
     edgeDeleteAnimation: null,
     nodeDeleteAnimation: null,
-    nodeCreateAnimation: null
+    nodeCreateAnimation: null,
+    fileHandle: null
   };
 
   tempState.nodes.forEach(n => {
@@ -1067,42 +1118,57 @@ function exportToPng(context: Context): void {
   a.click();
 }
 
-function loadFromFile(file: File, context: Context): void {
-  const { state, app } = context;
-  const { ctx, canvas } = app;
-  const reader = new FileReader();
-  reader.onload = (e) => {
+async function loadFromFile(context: Context): Promise<void> {
+  const { state } = context;
+
+  if ('showOpenFilePicker' in window) {
     try {
-      const data = JSON.parse(e.target!.result as string);
-      if (data.nodes) {
-        state.nodes = data.nodes.map((n: any) => {
-          const node: CanvasNode = { ...n };
-          if (n.width <= 20 && n.height <= 20) {
-            node.type = 'dot';
-            node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-          } else {
-            node.type = n.type || 'text';
-            node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
-          }
-          node.bgTransparent = n.bgTransparent || false;
-          node.autoResize = n.autoResize !== undefined ? n.autoResize : true;
-          return node;
-        });
-      }
-      if (data.edges) state.edges = data.edges;
-      if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-      if (data.viewport) {
-        state.zoom = data.viewport.zoom || 1;
-        state.offset.x = -data.viewport.x * state.zoom;
-        state.offset.y = -data.viewport.y * state.zoom;
-      }
-      state.historyManager.save(state);
-      render();
+      const [handle] = await (window as any).showOpenFilePicker({
+        types: [{
+          description: 'Canvas File',
+          accept: { 'application/json': ['.json', '.canvas'] }
+        }]
+      });
+      state.fileHandle = handle;
+      const f = await handle.getFile();
+      const data = await f.text();
+      const parsed = JSON.parse(data);
+      loadFromJson(parsed, context);
+      return;
     } catch (err) {
-      alert('ファイルの形式が正しくありません');
+      if ((err as Error).name === 'AbortError') return;
     }
-  };
-  reader.readAsText(file);
+  }
+
+  (_app.fileInput as HTMLInputElement).click();
+}
+
+function loadFromJson(data: any, context: Context): void {
+  const { state } = context;
+  if (data.nodes) {
+    state.nodes = data.nodes.map((n: any) => {
+      const node: CanvasNode = { ...n };
+      if (n.width <= 20 && n.height <= 20) {
+        node.type = 'dot';
+        node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+      } else {
+        node.type = n.type || 'text';
+        node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+      }
+      node.bgTransparent = n.bgTransparent || false;
+      node.autoResize = n.autoResize !== undefined ? n.autoResize : true;
+      return node;
+    });
+  }
+  if (data.edges) state.edges = data.edges;
+  if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
+  if (data.viewport) {
+    state.zoom = data.viewport.zoom || 1;
+    state.offset.x = -data.viewport.x * state.zoom;
+    state.offset.y = -data.viewport.y * state.zoom;
+  }
+  state.historyManager.save(state);
+  render();
 }
 
 function loadFromLocalStorage(state: State): void {
@@ -1486,7 +1552,7 @@ function initApp(context: Context): void {
   app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(_state));
   app.document.getElementById('btn-add-dot-to-edge')!.addEventListener('click', () => addDotAtEdge(_state));
   app.document.getElementById('btn-save')!.addEventListener('click', () => saveToFile(context));
-  app.document.getElementById('btn-load')!.addEventListener('click', () => fileInput.click());
+  app.document.getElementById('btn-load')!.addEventListener('click', () => loadFromFile(context));
   app.document.getElementById('btn-log')!.addEventListener('click', () => {
     const data = exportToObsidianCanvas(context.state);
     console.log(data);
@@ -1496,7 +1562,19 @@ function initApp(context: Context): void {
   });
   fileInput.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
-    if (target.files && target.files[0]) loadFromFile(target.files[0], context);
+    if (target.files && target.files[0]) {
+      const file = target.files[0];
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(reader.result as string);
+          loadFromJson(parsed, context);
+        } catch (err) {
+          alert('ファイルの形式が正しくありません');
+        }
+      };
+      reader.readAsText(file);
+    }
   });
 
   app.document.addEventListener('keydown', (e) => handleKeyDown(e, context));

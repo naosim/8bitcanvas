@@ -755,6 +755,7 @@
       state.nodes = state.nodes.filter((n) => n.id !== node.id);
       state.selectedNode = null;
       state.historyManager.save(state);
+      updatePropertiesPanel(state, _app);
       render();
     } else if (state.selectedEdge) {
       const edge = state.selectedEdge;
@@ -768,6 +769,7 @@
       startEdgeDeleteAnimation();
       state.selectedEdge = null;
       state.historyManager.save(state);
+      updatePropertiesPanel(state, _app);
       render();
     } else if (state.selectedNodes.length > 0) {
       state.selectedNodes.forEach((node) => {
@@ -775,7 +777,9 @@
       });
       state.nodes = state.nodes.filter((n) => !state.selectedNodes.includes(n));
       state.selectedNodes = [];
+      state.selectedNode = null;
       state.historyManager.save(state);
+      updatePropertiesPanel(state, _app);
       render();
     }
   }
@@ -1011,6 +1015,7 @@
   function handleKeyDown(e, context2) {
     const { state, app } = context2;
     const { document: document2 } = app;
+    const isInputFocused = document2.activeElement && (document2.activeElement.tagName === "INPUT" || document2.activeElement.tagName === "TEXTAREA" || document2.activeElement.tagName === "SELECT");
     if ((e.ctrlKey || e.metaKey) && e.key === "z") {
       e.preventDefault();
       if (e.shiftKey) redo(state);
@@ -1035,6 +1040,34 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "ArrowDown") {
       e.preventDefault();
       sendToBack(state);
+    }
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      const nodes = state.selectedNode ? [state.selectedNode] : state.selectedNodes;
+      if (nodes.length > 0) {
+        e.preventDefault();
+        const moveAmount = PIXEL_SIZE * 8;
+        if (e.key === "ArrowUp") nodes.forEach((n) => n.y -= moveAmount);
+        else if (e.key === "ArrowDown") nodes.forEach((n) => n.y += moveAmount);
+        else if (e.key === "ArrowLeft") nodes.forEach((n) => n.x -= moveAmount);
+        else if (e.key === "ArrowRight") nodes.forEach((n) => n.x += moveAmount);
+        nodes.forEach((n) => {
+          n.x = snapToPixel(n.x, PIXEL_SIZE);
+          n.y = snapToPixel(n.y, PIXEL_SIZE);
+        });
+        state.historyManager.save(state);
+        render();
+      } else if (!isInputFocused) {
+        e.preventDefault();
+      }
+    }
+    if (e.shiftKey && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.preventDefault();
+      const panAmount = PIXEL_SIZE * 8;
+      if (e.key === "ArrowUp") state.offset.y += panAmount;
+      else if (e.key === "ArrowDown") state.offset.y -= panAmount;
+      else if (e.key === "ArrowLeft") state.offset.x += panAmount;
+      else if (e.key === "ArrowRight") state.offset.x -= panAmount;
+      render();
     }
     if (e.key === "Tab") {
       e.preventDefault();
@@ -1061,10 +1094,10 @@
       }
     }
     if (e.key === "Delete" || e.key === "Backspace") {
-      const active = document2.activeElement;
-      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")) {
+      if (isInputFocused) {
         return;
       }
+      e.preventDefault();
       deleteSelected(state);
     }
   }
@@ -1189,23 +1222,30 @@
     const nodeProps = document2.getElementById("node-props");
     const edgeProps = document2.getElementById("edge-props");
     const bgTransparentOpt = document2.querySelector(".transparent-option");
+    const textProps = document2.getElementById("text-props");
     updatePaletteDisplay("bg-palette", context);
     if (state.selectedNode) {
       nodeProps.style.display = "flex";
       edgeProps.style.display = "none";
-      document2.getElementById("prop-text").value = state.selectedNode.text || "";
-      document2.getElementById("prop-text-halign").value = state.selectedNode.textAlign || "left";
-      document2.getElementById("prop-text-valign").value = state.selectedNode.textValign || "top";
+      const isText = state.selectedNode.type === "text";
+      textProps.style.display = isText ? "contents" : "none";
+      bgTransparentOpt.style.display = isText ? "inline" : "none";
+      if (isText) {
+        document2.getElementById("prop-text").value = state.selectedNode.text || "";
+        document2.getElementById("prop-text-halign").value = state.selectedNode.textAlign || "left";
+        document2.getElementById("prop-text-valign").value = state.selectedNode.textValign || "top";
+        document2.getElementById("prop-auto-resize").checked = state.selectedNode.autoResize !== false;
+      }
       document2.getElementById("prop-bg-transparent").checked = state.selectedNode.bgTransparent || false;
       document2.getElementById("prop-stroke-transparent").checked = state.selectedNode.strokeTransparent || false;
-      document2.getElementById("prop-auto-resize").checked = state.selectedNode.autoResize !== false;
-      const isText = state.selectedNode.type === "text";
-      bgTransparentOpt.style.display = isText ? "inline" : "none";
     } else if (state.selectedEdge) {
       nodeProps.style.display = "none";
       edgeProps.style.display = "flex";
       document2.getElementById("prop-arrow-start").checked = state.selectedEdge.arrowStart || false;
       document2.getElementById("prop-arrow-end").checked = state.selectedEdge.arrowEnd || false;
+    } else {
+      nodeProps.style.display = "none";
+      edgeProps.style.display = "none";
     }
   }
   function updatePaletteDisplay(containerId, context2) {

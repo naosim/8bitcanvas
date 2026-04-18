@@ -51,8 +51,8 @@ body {
   background: #222;
   border-top: 2px solid var(--fg-color);
   flex-wrap: wrap;
-  height: 64px;
   align-items: center;
+  min-height: 64px;
 }
 
 #canvas-container {
@@ -76,6 +76,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .prop-row {

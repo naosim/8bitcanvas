@@ -885,6 +885,7 @@ function deleteSelected(state: State): void {
     state.nodes = state.nodes.filter(n => n.id !== node.id);
     state.selectedNode = null;
     state.historyManager.save(state);
+    updatePropertiesPanel(state, _app);
     render();
   } else if (state.selectedEdge) {
     const edge = state.selectedEdge;
@@ -898,6 +899,7 @@ function deleteSelected(state: State): void {
     startEdgeDeleteAnimation();
     state.selectedEdge = null;
     state.historyManager.save(state);
+    updatePropertiesPanel(state, _app);
     render();
   } else if (state.selectedNodes.length > 0) {
     state.selectedNodes.forEach(node => {
@@ -905,7 +907,9 @@ function deleteSelected(state: State): void {
     });
     state.nodes = state.nodes.filter(n => !state.selectedNodes.includes(n));
     state.selectedNodes = [];
+    state.selectedNode = null;
     state.historyManager.save(state);
+    updatePropertiesPanel(state, _app);
     render();
   }
 }
@@ -1162,6 +1166,12 @@ function sendToBack(state: State): void {
 function handleKeyDown(e: KeyboardEvent, context: Context): void {
   const { state, app } = context;
   const { document } = app;
+
+  const isInputFocused = document.activeElement && 
+    (document.activeElement.tagName === 'INPUT' || 
+     document.activeElement.tagName === 'TEXTAREA' || 
+     document.activeElement.tagName === 'SELECT');
+
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
     e.preventDefault();
     if (e.shiftKey) redo(state);
@@ -1186,6 +1196,34 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
   if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowDown') {
     e.preventDefault();
     sendToBack(state);
+  }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    const nodes = state.selectedNode ? [state.selectedNode] : state.selectedNodes;
+    if (nodes.length > 0) {
+      e.preventDefault();
+      const moveAmount = PIXEL_SIZE * 8;
+      if (e.key === 'ArrowUp') nodes.forEach(n => n.y -= moveAmount);
+      else if (e.key === 'ArrowDown') nodes.forEach(n => n.y += moveAmount);
+      else if (e.key === 'ArrowLeft') nodes.forEach(n => n.x -= moveAmount);
+      else if (e.key === 'ArrowRight') nodes.forEach(n => n.x += moveAmount);
+      nodes.forEach(n => {
+        n.x = snapToPixel(n.x, PIXEL_SIZE);
+        n.y = snapToPixel(n.y, PIXEL_SIZE);
+      });
+      state.historyManager.save(state);
+      render();
+    } else if (!isInputFocused) {
+      e.preventDefault();
+    }
+  }
+  if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    const panAmount = PIXEL_SIZE * 8;
+    if (e.key === 'ArrowUp') state.offset.y += panAmount;
+    else if (e.key === 'ArrowDown') state.offset.y -= panAmount;
+    else if (e.key === 'ArrowLeft') state.offset.x += panAmount;
+    else if (e.key === 'ArrowRight') state.offset.x -= panAmount;
+    render();
   }
   if (e.key === 'Tab') {
     e.preventDefault();
@@ -1212,10 +1250,10 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
     }
   }
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+    if (isInputFocused) {
       return;
     }
+    e.preventDefault();
     deleteSelected(state);
   }
 }
@@ -1352,26 +1390,34 @@ function updatePropertiesPanel(state: State, app: App): void {
   const nodeProps = document.getElementById('node-props') as HTMLElement;
   const edgeProps = document.getElementById('edge-props') as HTMLElement;
   const bgTransparentOpt = document.querySelector('.transparent-option') as HTMLElement;
+  const textProps = document.getElementById('text-props') as HTMLElement;
 
   updatePaletteDisplay('bg-palette', context);
 
   if (state.selectedNode) {
     nodeProps.style.display = 'flex';
     edgeProps.style.display = 'none';
-    (document.getElementById('prop-text') as HTMLInputElement).value = state.selectedNode.text || '';
-    (document.getElementById('prop-text-halign') as HTMLSelectElement).value = state.selectedNode.textAlign || 'left';
-    (document.getElementById('prop-text-valign') as HTMLSelectElement).value = state.selectedNode.textValign || 'top';
-    (document.getElementById('prop-bg-transparent') as HTMLInputElement).checked = state.selectedNode.bgTransparent || false;
-    (document.getElementById('prop-stroke-transparent') as HTMLInputElement).checked = state.selectedNode.strokeTransparent || false;
-    (document.getElementById('prop-auto-resize') as HTMLInputElement).checked = state.selectedNode.autoResize !== false;
 
     const isText = state.selectedNode.type === 'text';
+    textProps.style.display = isText ? 'contents' : 'none';
     bgTransparentOpt.style.display = isText ? 'inline' : 'none';
+
+    if (isText) {
+      (document.getElementById('prop-text') as HTMLInputElement).value = state.selectedNode.text || '';
+      (document.getElementById('prop-text-halign') as HTMLSelectElement).value = state.selectedNode.textAlign || 'left';
+      (document.getElementById('prop-text-valign') as HTMLSelectElement).value = state.selectedNode.textValign || 'top';
+      (document.getElementById('prop-auto-resize') as HTMLInputElement).checked = state.selectedNode.autoResize !== false;
+    }
+    (document.getElementById('prop-bg-transparent') as HTMLInputElement).checked = state.selectedNode.bgTransparent || false;
+    (document.getElementById('prop-stroke-transparent') as HTMLInputElement).checked = state.selectedNode.strokeTransparent || false;
   } else if (state.selectedEdge) {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'flex';
     (document.getElementById('prop-arrow-start') as HTMLInputElement).checked = state.selectedEdge.arrowStart || false;
     (document.getElementById('prop-arrow-end') as HTMLInputElement).checked = state.selectedEdge.arrowEnd || false;
+  } else {
+    nodeProps.style.display = 'none';
+    edgeProps.style.display = 'none';
   }
 }
 

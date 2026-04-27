@@ -544,6 +544,60 @@
     }
     return null;
   }
+  var recognition = null;
+  var recognitionContinuous = false;
+  function startVoiceInput(context2) {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      alert("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u306F\u97F3\u58F0\u8A8D\u8B58\u306B\u5BFE\u5FDC\u3057\u3066\u3044\u307E\u305B\u3093");
+      return;
+    }
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!recognition) {
+      recognition = new SpeechRecognitionClass();
+      recognition.lang = "ja-JP";
+      recognition.continuous = recognitionContinuous;
+      recognition.interimResults = true;
+      recognition.onresult = (event) => {
+        if (!context2.state.selectedNode) return;
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (event.results[event.resultIndex].isFinal) {
+          const textField = document.getElementById("prop-text");
+          textField.value += transcript;
+          context2.state.selectedNode.text = textField.value;
+          if (context2.state.selectedNode.autoResize !== false) {
+            autoResizeNode(context2.state.selectedNode, context2);
+          }
+          render();
+          context2.state.historyManager.save(context2.state);
+        }
+      };
+      recognition.onend = () => {
+        if (recognitionContinuous) {
+          recognition?.start();
+        }
+      };
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+      };
+    }
+    recognitionContinuous = !recognitionContinuous;
+    if (recognitionContinuous) {
+      document.getElementById("btn-voice").style.background = "#ff0000";
+      document.getElementById("btn-voice").style.animation = "pulse 1s infinite";
+      try {
+        recognition.start();
+      } catch (e) {
+        console.error("Recognition already started");
+      }
+    } else {
+      recognition.stop();
+      document.getElementById("btn-voice").style.background = "";
+      document.getElementById("btn-voice").style.animation = "";
+    }
+  }
   function findEdgeAt(point, context2) {
     const { state } = context2;
     const threshold = 10;
@@ -1371,6 +1425,9 @@
     app.document.getElementById("btn-log").addEventListener("click", () => {
       const data = exportToObsidianCanvas(context2.state);
       console.log(data);
+    });
+    app.document.getElementById("btn-voice").addEventListener("click", () => {
+      startVoiceInput(context2);
     });
     app.document.getElementById("btn-export-png").addEventListener("click", () => {
       exportToPng(context2);

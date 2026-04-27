@@ -664,6 +664,67 @@ function findNodeAt(point: Point, context: Context): CanvasNode | null {
   return null;
 }
 
+let recognition: any = null;
+let recognitionContinuous = false;
+
+function startVoiceInput(context: Context): void {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('このブラウザは音声認識に対応していません');
+    return;
+  }
+
+  const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (!recognition) {
+    recognition = new SpeechRecognitionClass();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = recognitionContinuous;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+      if (!context.state.selectedNode) return;
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (event.results[event.resultIndex].isFinal) {
+        const textField = document.getElementById('prop-text') as HTMLTextAreaElement;
+        textField.value += transcript;
+        context.state.selectedNode.text = textField.value;
+        if (context.state.selectedNode.autoResize !== false) {
+          autoResizeNode(context.state.selectedNode, context);
+        }
+        render();
+        context.state.historyManager.save(context.state);
+      }
+    };
+
+    recognition.onend = () => {
+      if (recognitionContinuous) {
+        recognition?.start();
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error', event.error);
+    };
+  }
+
+  recognitionContinuous = !recognitionContinuous;
+  if (recognitionContinuous) {
+    (document.getElementById('btn-voice') as HTMLButtonElement).style.background = '#ff0000';
+    (document.getElementById('btn-voice') as HTMLButtonElement).style.animation = 'pulse 1s infinite';
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Recognition already started');
+    }
+  } else {
+    recognition.stop();
+    (document.getElementById('btn-voice') as HTMLButtonElement).style.background = '';
+    (document.getElementById('btn-voice') as HTMLButtonElement).style.animation = '';
+  }
+}
+
 function findEdgeAt(point: Point, context: Context): Edge | null {
   const { state } = context;
   const threshold = 10;
@@ -1556,6 +1617,9 @@ function initApp(context: Context): void {
   app.document.getElementById('btn-log')!.addEventListener('click', () => {
     const data = exportToObsidianCanvas(context.state);
     console.log(data);
+  });
+  app.document.getElementById('btn-voice')!.addEventListener('click', () => {
+    startVoiceInput(context);
   });
   app.document.getElementById('btn-export-png')!.addEventListener('click', () => {
     exportToPng(context);

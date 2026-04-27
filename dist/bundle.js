@@ -712,6 +712,45 @@
     state.historyManager.save(state);
     render();
   }
+  function splitNodeToMultipleNodes(context2) {
+    const { state } = context2;
+    if (!state.selectedNode || state.selectedNode.type !== "text") return;
+    const text = state.selectedNode.text;
+    if (!text) return;
+    const parts = text.split("\n").filter((s) => s.trim().length > 0);
+    if (parts.length <= 1) return;
+    const baseNode = state.selectedNode;
+    const baseX = baseNode.x;
+    const baseY = baseNode.y;
+    const spacing = baseNode.height;
+    state.nodes = state.nodes.filter((n) => n.id !== baseNode.id);
+    parts.forEach((part, i) => {
+      const id = "node-" + Date.now() + i;
+      const node = {
+        id,
+        type: "text",
+        x: baseX,
+        y: baseY + i * spacing,
+        width: baseNode.width,
+        height: baseNode.height,
+        text: part,
+        textAlign: baseNode.textAlign,
+        textValign: baseNode.textValign,
+        bgPaletteIndex: baseNode.bgPaletteIndex,
+        bgTransparent: baseNode.bgTransparent,
+        strokeTransparent: baseNode.strokeTransparent,
+        autoResize: baseNode.autoResize
+      };
+      if (node.autoResize !== false) {
+        autoResizeNode(node, context2);
+      }
+      state.nodes.push(node);
+    });
+    state.selectedNode = null;
+    state.historyManager.save(state);
+    updatePropertiesPanel(state, _app);
+    render();
+  }
   function addDotNode(state, x, y, app) {
     const id = "node-" + Date.now();
     const size = PIXEL_SIZE * 3;
@@ -1428,6 +1467,9 @@
     });
     app.document.getElementById("btn-voice").addEventListener("click", () => {
       startVoiceInput(context2);
+    });
+    app.document.getElementById("btn-split").addEventListener("click", () => {
+      splitNodeToMultipleNodes(context2);
     });
     app.document.getElementById("btn-export-png").addEventListener("click", () => {
       exportToPng(context2);

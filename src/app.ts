@@ -860,7 +860,13 @@ function splitNodeToMultipleNodes(context: Context): void {
   const baseY = baseNode.y;
   const spacing = baseNode.height;
 
+  const incomingEdges = state.edges.filter(e => e.toNode === baseNode.id);
+  const outgoingEdges = state.edges.filter(e => e.fromNode === baseNode.id);
+
   state.nodes = state.nodes.filter(n => n.id !== baseNode.id);
+  state.edges = state.edges.filter(e => e.fromNode !== baseNode.id && e.toNode !== baseNode.id);
+
+  const newNodes: CanvasNode[] = [];
 
   parts.forEach((part, i) => {
     const id = 'node-' + Date.now() + i;
@@ -883,6 +889,39 @@ function splitNodeToMultipleNodes(context: Context): void {
       autoResizeNode(node, context);
     }
     state.nodes.push(node);
+    newNodes.push(node);
+  });
+
+  const newNodeIds = newNodes.map(n => n.id);
+
+  incomingEdges.forEach(edge => {
+    newNodeIds.forEach(newId => {
+      const newEdge: Edge = {
+        id: 'edge-' + Date.now() + '-' + newId,
+        fromNode: edge.fromNode,
+        toNode: newId,
+        fromSide: edge.fromSide || 'bottom',
+        toSide: edge.toSide || 'top',
+        arrowStart: edge.arrowStart,
+        arrowEnd: edge.arrowEnd
+      };
+      state.edges.push(newEdge);
+    });
+  });
+
+  outgoingEdges.forEach(edge => {
+    newNodeIds.forEach(newId => {
+      const newEdge: Edge = {
+        id: 'edge-' + Date.now() + '-' + newId,
+        fromNode: newId,
+        toNode: edge.toNode,
+        fromSide: edge.fromSide || 'bottom',
+        toSide: edge.toSide || 'top',
+        arrowStart: edge.arrowStart,
+        arrowEnd: edge.arrowEnd
+      };
+      state.edges.push(newEdge);
+    });
   });
 
   state.selectedNode = null;
@@ -1365,6 +1404,7 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
     sendToBack(state);
   }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    if (isInputFocused) return;
     const nodes = state.selectedNode ? [state.selectedNode] : state.selectedNodes;
     if (nodes.length > 0) {
       e.preventDefault();
@@ -1379,11 +1419,10 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
       });
       state.historyManager.save(state);
       render();
-    } else if (!isInputFocused) {
-      e.preventDefault();
     }
   }
   if (e.shiftKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+    if (isInputFocused) return;
     e.preventDefault();
     const panAmount = PIXEL_SIZE * 8;
     if (e.key === 'ArrowUp') state.offset.y += panAmount;

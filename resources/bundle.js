@@ -822,8 +822,8 @@
     const node = {
       id,
       type: "text",
-      x: nodeX - TEXT_NODE_DEFAULT.width / 2,
-      y: nodeY - TEXT_NODE_DEFAULT.height / 2,
+      x: nodeX,
+      y: nodeY,
       width: TEXT_NODE_DEFAULT.width,
       height: TEXT_NODE_DEFAULT.height,
       text: "\u30C6\u30AD\u30B9\u30C8",
@@ -935,8 +935,8 @@
     const node = {
       id,
       type: "dot",
-      x: nodeX - size / 2,
-      y: nodeY - size / 2,
+      x: nodeX,
+      y: nodeY,
       width: size,
       height: size,
       bgPaletteIndex: 4,
@@ -1392,8 +1392,8 @@
       e.preventDefault();
       if (state.selectedNode) {
         const fromNode = state.selectedNode;
-        const newX = fromNode.x + fromNode.width + 20;
-        const newY = fromNode.y;
+        const newX = fromNode.x + fromNode.width + 20 + TEXT_NODE_DEFAULT.width / 2;
+        const newY = fromNode.y + fromNode.height / 2;
         addTextNode(state, newX, newY);
         const toNode = state.selectedNode;
         if (fromNode && toNode && fromNode.id !== toNode.id) {
@@ -1401,8 +1401,8 @@
             id: "edge-" + Date.now(),
             fromNode: fromNode.id,
             toNode: toNode.id,
-            fromSide: "bottom",
-            toSide: "top",
+            fromSide: "right",
+            toSide: "left",
             arrowStart: false,
             arrowEnd: false
           };

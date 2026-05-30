@@ -1014,8 +1014,8 @@ function addTextNode(state: State, x?: number, y?: number, app?: App): void {
   const node: CanvasNode = {
     id,
     type: 'text',
-    x: nodeX - TEXT_NODE_DEFAULT.width / 2,
-    y: nodeY - TEXT_NODE_DEFAULT.height / 2,
+    x: nodeX,
+    y: nodeY,
     width: TEXT_NODE_DEFAULT.width,
     height: TEXT_NODE_DEFAULT.height,
     text: 'テキスト',
@@ -1139,8 +1139,8 @@ function addDotNode(state: State, x?: number, y?: number, app?: App): void {
   const node: CanvasNode = {
     id,
     type: 'dot',
-    x: nodeX - size / 2,
-    y: nodeY - size / 2,
+    x: nodeX,
+    y: nodeY,
     width: size,
     height: size,
     bgPaletteIndex: 4,
@@ -1638,8 +1638,8 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
     e.preventDefault();
     if (state.selectedNode) {
       const fromNode = state.selectedNode;
-      const newX = fromNode.x + fromNode.width + 20;
-      const newY = fromNode.y;
+      const newX = fromNode.x + fromNode.width + 20 + TEXT_NODE_DEFAULT.width / 2;
+      const newY = fromNode.y + fromNode.height / 2;
       addTextNode(state, newX, newY);
       const toNode = state.selectedNode;
       if (fromNode && toNode && fromNode.id !== toNode.id) {
@@ -1647,8 +1647,8 @@ function handleKeyDown(e: KeyboardEvent, context: Context): void {
           id: 'edge-' + Date.now(),
           fromNode: fromNode.id,
           toNode: toNode.id,
-          fromSide: 'bottom',
-          toSide: 'top',
+          fromSide: 'right',
+          toSide: 'left',
           arrowStart: false,
           arrowEnd: false
         };

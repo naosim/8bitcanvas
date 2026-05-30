@@ -58,12 +58,28 @@ async function saveToNeutralino(context: Context): Promise<void> {
     if (filePath) {
       await Neutralino.filesystem.writeFile(filePath, data);
       state.neutralinoFilePath = filePath;
-      localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
       updateFileName(state);
       await startFileWatcher(context);
     }
   } catch (err) {
     console.error('NeutralinoJS save error:', err);
+  }
+}
+
+async function saveToOverwriteNeutralino(context: Context): Promise<void> {
+  const { state } = context;
+  if (!state.neutralinoFilePath) {
+    await saveToNeutralino(context);
+    return;
+  }
+  const data = exportToObsidianCanvas(state);
+  try {
+    await Neutralino.filesystem.writeFile(state.neutralinoFilePath, data);
+    await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+    await startFileWatcher(context);
+  } catch (err) {
+    console.error('NeutralinoJS overwrite error:', err);
   }
 }
 
@@ -199,6 +215,34 @@ const STORAGE_KEYS = {
   DEV_MODE: 'tinytidycanvas-dev'
 } as const;
 
+async function storageSet(key: string, value: string): Promise<void> {
+  if (isNeutralino()) {
+    await Neutralino.storage.setData(key, value);
+  } else {
+    localStorage.setItem(key, value);
+  }
+}
+
+async function storageGet(key: string): Promise<string | null> {
+  if (isNeutralino()) {
+    try {
+      return await Neutralino.storage.getData(key);
+    } catch {
+      return null;
+    }
+  } else {
+    return localStorage.getItem(key);
+  }
+}
+
+async function storageRemove(key: string): Promise<void> {
+  if (isNeutralino()) {
+    await Neutralino.storage.setData(key, '');
+  } else {
+    localStorage.removeItem(key);
+  }
+}
+
 const TEXT_NODE_DEFAULT = {
   width: 120,
   height: 60
@@ -307,9 +351,10 @@ class HistoryManager {
     const data = JSON.stringify({
       nodes: state.nodes,
       edges: state.edges,
-      colorPalettes: state.colorPalettes
+      colorPalettes: state.colorPalettes,
+      neutralinoFilePath: state.neutralinoFilePath
     });
-    localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+    storageSet(STORAGE_KEYS.AUTOSAVE, data);
   }
 
   undo(state: State): boolean {
@@ -1351,7 +1396,7 @@ async function saveToFile(context: Context): Promise<void> {
         const writable = await state.fileHandle.createWritable();
         await writable.write(data);
         await writable.close();
-        localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
         return;
       }
       const handle = await (window as any).showSaveFilePicker({
@@ -1364,7 +1409,7 @@ async function saveToFile(context: Context): Promise<void> {
       const writable = await handle.createWritable();
       await writable.write(data);
       await writable.close();
-      localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
       return;
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
@@ -1378,7 +1423,31 @@ async function saveToFile(context: Context): Promise<void> {
   a.download = 'canvas.8bc';
   a.click();
   URL.revokeObjectURL(url);
-  localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+  await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+}
+
+async function saveToOverwrite(context: Context): Promise<void> {
+  const { state } = context;
+
+  if (isNeutralino()) {
+    await saveToOverwriteNeutralino(context);
+    return;
+  }
+
+  if (state.fileHandle) {
+    const data = exportToObsidianCanvas(state);
+    try {
+      const writable = await state.fileHandle.createWritable();
+      await writable.write(data);
+      await writable.close();
+      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      return;
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+    }
+  }
+
+  await saveToFile(context);
 }
 
 function exportToPng(context: Context): void {
@@ -1519,14 +1588,15 @@ function loadFromJson(data: any, context: Context): void {
   render();
 }
 
-function loadFromLocalStorage(state: State): void {
-  const data = localStorage.getItem(STORAGE_KEYS.AUTOSAVE);
+async function loadFromLocalStorage(state: State): Promise<void> {
+  const data = await storageGet(STORAGE_KEYS.AUTOSAVE);
   if (data) {
     try {
       const parsed = JSON.parse(data);
       if (parsed.nodes) state.nodes = parsed.nodes;
       if (parsed.edges) state.edges = parsed.edges;
       if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
+      if (parsed.neutralinoFilePath) state.neutralinoFilePath = parsed.neutralinoFilePath;
       state.historyManager.save(state);
     } catch (e) { }
   }
@@ -1924,6 +1994,7 @@ function initApp(context: Context): void {
   app.document.getElementById('btn-front')!.addEventListener('click', () => bringToFront(_state));
   app.document.getElementById('btn-back')!.addEventListener('click', () => sendToBack(_state));
   app.document.getElementById('btn-add-dot-to-edge')!.addEventListener('click', () => addDotAtEdge(_state));
+  app.document.getElementById('btn-save-overwrite')!.addEventListener('click', () => saveToOverwrite(context));
   app.document.getElementById('btn-save')!.addEventListener('click', () => saveToFile(context));
   app.document.getElementById('btn-load')!.addEventListener('click', () => loadFromFile(context));
   app.document.getElementById('btn-log')!.addEventListener('click', () => {
@@ -2037,19 +2108,23 @@ function initApp(context: Context): void {
   });
 
   resizeCanvasWithRender(_app);
-  loadFromLocalStorage(context.state);
-  context.state.historyManager.save(context.state);
-  render();
-  updatePropertiesPanel(_state, _app);
+  loadFromLocalStorage(context.state).then(() => {
+    context.state.historyManager.save(context.state);
+    updateFileName(_state);
+    render();
+    updatePropertiesPanel(_state, _app);
+  });
 
-  const isDev = localStorage.getItem(STORAGE_KEYS.DEV_MODE) === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
-  if (isDev) {
-    (app.document.getElementById('btn-clear-storage') as HTMLElement).style.display = 'inline-block';
-  }
+  storageGet(STORAGE_KEYS.DEV_MODE).then((devMode) => {
+    const isDev = devMode === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
+    if (isDev) {
+      (app.document.getElementById('btn-clear-storage') as HTMLElement).style.display = 'inline-block';
+    }
+  });
 
-  app.document.getElementById('btn-clear-storage')!.addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_KEYS.AUTOSAVE);
-    localStorage.removeItem(STORAGE_KEYS.DEV_MODE);
+  app.document.getElementById('btn-clear-storage')!.addEventListener('click', async () => {
+    await storageRemove(STORAGE_KEYS.AUTOSAVE);
+    await storageRemove(STORAGE_KEYS.DEV_MODE);
     location.reload();
   });
 

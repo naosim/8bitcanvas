@@ -227,7 +227,7 @@
       loadFromJson(parsed, context2);
       state.neutralinoFilePath = options?.neutralinoFilePath ?? null;
       updateFileName(state, options?.fileName);
-      if (state.neutralinoFilePath && isNeutralino()) {
+      if (state.neutralinoFilePath) {
         startFileWatcher(context2);
       }
     } catch (err) {
@@ -261,7 +261,8 @@
   async function storageGet(key) {
     if (isNeutralino()) {
       try {
-        return await Neutralino.storage.getData(key);
+        const value = await Neutralino.storage.getData(key);
+        return value || null;
       } catch {
         return null;
       }

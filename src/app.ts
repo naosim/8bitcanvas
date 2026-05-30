@@ -186,7 +186,7 @@ function applyLoadedData(
     loadFromJson(parsed, context);
     state.neutralinoFilePath = options?.neutralinoFilePath ?? null;
     updateFileName(state, options?.fileName);
-    if (state.neutralinoFilePath && isNeutralino()) {
+    if (state.neutralinoFilePath) {
       startFileWatcher(context);
     }
   } catch (err) {
@@ -226,7 +226,8 @@ async function storageSet(key: string, value: string): Promise<void> {
 async function storageGet(key: string): Promise<string | null> {
   if (isNeutralino()) {
     try {
-      return await Neutralino.storage.getData(key);
+      const value = await Neutralino.storage.getData(key);
+      return value || null;
     } catch {
       return null;
     }
@@ -237,6 +238,8 @@ async function storageGet(key: string): Promise<string | null> {
 
 async function storageRemove(key: string): Promise<void> {
   if (isNeutralino()) {
+    // NeutralinoJSのstorage APIにはremoveItemがないため空文字を保存
+    // storageGetでは空文字をnullとして扱う
     await Neutralino.storage.setData(key, '');
   } else {
     localStorage.removeItem(key);

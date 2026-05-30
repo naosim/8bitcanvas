@@ -106,177 +106,7 @@
     return idx >= 0 ? idx : 0;
   }
 
-  // src/app.ts
-  function isNeutralino() {
-    try {
-      return typeof Neutralino !== "undefined" && Neutralino !== null && typeof Neutralino.init === "function";
-    } catch {
-      return false;
-    }
-  }
-  async function saveToNeutralino(context2) {
-    const { state } = context2;
-    const data = exportToObsidianCanvas(state);
-    try {
-      const filePath = await Neutralino.os.showSaveDialog("Canvas\u30D5\u30A1\u30A4\u30EB\u3092\u4FDD\u5B58", {
-        filters: [{ name: "Canvas File", extensions: ["json", "8bc"] }]
-      });
-      if (filePath) {
-        await Neutralino.filesystem.writeFile(filePath, data);
-        state.neutralinoFilePath = filePath;
-        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
-        updateFileName(state);
-        await startFileWatcher(context2);
-      }
-    } catch (err) {
-      console.error("NeutralinoJS save error:", err);
-    }
-  }
-  async function saveToOverwriteNeutralino(context2) {
-    const { state } = context2;
-    if (!state.neutralinoFilePath) {
-      await saveToNeutralino(context2);
-      return;
-    }
-    const data = exportToObsidianCanvas(state);
-    try {
-      await Neutralino.filesystem.writeFile(state.neutralinoFilePath, data);
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
-      await startFileWatcher(context2);
-    } catch (err) {
-      console.error("NeutralinoJS overwrite error:", err);
-    }
-  }
-  async function loadFromNeutralino(context2) {
-    try {
-      const filePaths = await Neutralino.os.showOpenDialog("Canvas\u30D5\u30A1\u30A4\u30EB\u3092\u958B\u304F", {
-        filters: [{ name: "Canvas File", extensions: ["json", "8bc"] }],
-        multiple: false
-      });
-      if (filePaths && filePaths.length > 0) {
-        const filePath = filePaths[0];
-        const data = await Neutralino.filesystem.readFile(filePath);
-        applyLoadedData(data, context2, { neutralinoFilePath: filePath });
-      }
-    } catch (err) {
-      console.error("NeutralinoJS load error:", err);
-    }
-  }
-  async function startFileWatcher(context2) {
-    const { state } = context2;
-    if (!isNeutralino() || !state.neutralinoFilePath) return;
-    await stopFileWatcher(context2);
-    try {
-      const pathParts = await Neutralino.filesystem.getPathParts(state.neutralinoFilePath);
-      const dirPath = pathParts.parentPath;
-      const fileName = pathParts.filename;
-      const watcherId = await Neutralino.filesystem.createWatcher(dirPath);
-      state.neutralinoWatcherId = watcherId;
-      Neutralino.events.on("watchFile", (event) => {
-        if (event.detail.id === watcherId && event.detail.action === "modified") {
-          const changedFile = event.detail.filename;
-          if (changedFile === fileName) {
-            reloadCurrentFile(context2);
-          }
-        }
-      });
-      console.log("File watcher started for directory:", dirPath, "(watching:", fileName, ")");
-    } catch (err) {
-      console.warn("File watcher not available:", err.message || err);
-    }
-  }
-  async function stopFileWatcher(context2) {
-    const { state } = context2;
-    if (!isNeutralino() || state.neutralinoWatcherId === null) return;
-    try {
-      await Neutralino.filesystem.removeWatcher(state.neutralinoWatcherId);
-      state.neutralinoWatcherId = null;
-      console.log("File watcher stopped");
-    } catch (err) {
-      console.error("Stop file watcher error:", err);
-    }
-  }
-  async function reloadCurrentFile(context2) {
-    const { state } = context2;
-    if (!isNeutralino() || !state.neutralinoFilePath) return;
-    try {
-      const data = await Neutralino.filesystem.readFile(state.neutralinoFilePath);
-      const parsed = JSON.parse(data);
-      loadFromJson(parsed, context2);
-      updateFileName(state);
-    } catch (err) {
-      console.error("Reload file error:", err);
-    }
-  }
-  function updateFileName(state, fileName) {
-    const el = document.getElementById("file-name");
-    if (!el) return;
-    if (fileName) {
-      el.textContent = fileName;
-    } else if (state.neutralinoFilePath) {
-      const parts = state.neutralinoFilePath.replace(/\\/g, "/").split("/");
-      el.textContent = parts[parts.length - 1];
-    } else {
-      el.textContent = "\u65B0\u898F";
-    }
-  }
-  function applyLoadedData(data, context2, options) {
-    const { state } = context2;
-    try {
-      const parsed = JSON.parse(data);
-      loadFromJson(parsed, context2);
-      state.neutralinoFilePath = options?.neutralinoFilePath ?? null;
-      updateFileName(state, options?.fileName);
-      if (state.neutralinoFilePath) {
-        startFileWatcher(context2);
-      }
-    } catch (err) {
-      alert("\u30D5\u30A1\u30A4\u30EB\u306E\u5F62\u5F0F\u304C\u6B63\u3057\u304F\u3042\u308A\u307E\u305B\u3093");
-    }
-  }
-  function handleDrop(e, context2) {
-    e.preventDefault();
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext !== "json" && ext !== "8bc") return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      applyLoadedData(reader.result, context2, { fileName: file.name });
-    };
-    reader.readAsText(file);
-  }
-  var STORAGE_KEYS = {
-    AUTOSAVE: "tinytidycanvas-autosave",
-    DEV_MODE: "tinytidycanvas-dev"
-  };
-  async function storageSet(key, value) {
-    if (isNeutralino()) {
-      await Neutralino.storage.setData(key, value);
-    } else {
-      localStorage.setItem(key, value);
-    }
-  }
-  async function storageGet(key) {
-    if (isNeutralino()) {
-      try {
-        const value = await Neutralino.storage.getData(key);
-        return value || null;
-      } catch {
-        return null;
-      }
-    } else {
-      return localStorage.getItem(key);
-    }
-  }
-  async function storageRemove(key) {
-    if (isNeutralino()) {
-      await Neutralino.storage.setData(key, "");
-    } else {
-      localStorage.removeItem(key);
-    }
-  }
+  // src/domain.ts
   var TEXT_NODE_DEFAULT = {
     width: 120,
     height: 60
@@ -286,19 +116,14 @@
   var LINE_HEIGHT = 18;
   var PIXEL_SIZE = 4;
   var NEW_CANVAS_INITIAL_OFFSET = PIXEL_SIZE * 16;
-  var _app = {
-    document,
-    canvas: document.getElementById("canvas"),
-    ctx: document.getElementById("canvas").getContext("2d"),
-    fileInput: document.getElementById("file-input")
-  };
   var HistoryManager = class {
-    constructor(maxSize = 50) {
+    constructor(maxSize = 50, onSave) {
       this.history = [];
       this.historyIndex = -1;
       this.maxSize = maxSize;
+      this.onSave = onSave;
     }
-    save(state) {
+    save(state, extra) {
       this.history = this.history.slice(0, this.historyIndex + 1);
       this.history.push(JSON.stringify({
         nodes: state.nodes,
@@ -314,9 +139,9 @@
         nodes: state.nodes,
         edges: state.edges,
         colorPalettes: state.colorPalettes,
-        neutralinoFilePath: state.neutralinoFilePath
+        ...extra
       });
-      storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      this.onSave?.(data);
     }
     undo(state) {
       if (this.historyIndex > 0) {
@@ -348,6 +173,277 @@
     canRedo() {
       return this.historyIndex < this.history.length - 1;
     }
+  };
+  function findFreePosition(state, x, y, width, height) {
+    const offset = PIXEL_SIZE * 8;
+    const maxAttempts = 20;
+    for (let i = 0; i < maxAttempts; i++) {
+      const checkX = x - width / 2 + i % 5 * offset * Math.floor(i / 5);
+      const checkY = y - height / 2 + Math.floor(i / 5) * offset;
+      const occupied = state.nodes.some((n) => {
+        return !(checkX + width < n.x || checkX > n.x + n.width || checkY + height < n.y || checkY > n.y + n.height);
+      });
+      if (!occupied) {
+        return { x: checkX, y: checkY };
+      }
+    }
+    return { x: x - width / 2, y: y - height / 2 };
+  }
+  function snapToPixel(val, pixelSize) {
+    return Math.round(val / pixelSize) * pixelSize;
+  }
+  function exportToObsidianCanvas(state) {
+    const data = {
+      nodes: state.nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        x: n.x,
+        y: n.y,
+        width: n.width,
+        height: n.height,
+        text: n.text,
+        textAlign: n.textAlign,
+        textValign: n.textValign,
+        color: n.type === "dot" ? void 0 : state.colorPalettes[n.bgPaletteIndex],
+        bgTransparent: n.bgTransparent,
+        strokeTransparent: n.strokeTransparent
+      })),
+      edges: state.edges.map((e) => ({
+        id: e.id,
+        fromNode: e.fromNode,
+        toNode: e.toNode,
+        fromSide: e.fromSide,
+        toSide: e.toSide,
+        arrowStart: e.arrowStart,
+        arrowEnd: e.arrowEnd
+      })),
+      colorPalettes: state.colorPalettes,
+      viewport: {
+        x: -state.offset.x / state.zoom,
+        y: -state.offset.y / state.zoom,
+        zoom: state.zoom
+      }
+    };
+    return JSON.stringify(data, null, 2);
+  }
+  function loadFromJson(data, state) {
+    if (data.nodes) {
+      state.nodes = data.nodes.map((n) => {
+        const node = { ...n };
+        if (n.width <= 20 && n.height <= 20) {
+          node.type = "dot";
+        }
+        return node;
+      });
+    }
+    if (data.edges) {
+      state.edges = data.edges;
+    }
+    if (data.colorPalettes) {
+      state.colorPalettes = data.colorPalettes;
+    }
+  }
+
+  // src/platform.ts
+  function asPlatformState(state) {
+    return state;
+  }
+  var STORAGE_KEYS = {
+    AUTOSAVE: "tinytidycanvas-autosave",
+    DEV_MODE: "tinytidycanvas-dev"
+  };
+  function isNeutralino() {
+    try {
+      return typeof Neutralino !== "undefined" && Neutralino !== null && typeof Neutralino.init === "function";
+    } catch {
+      return false;
+    }
+  }
+  async function storageSet(key, value) {
+    if (isNeutralino()) {
+      await Neutralino.storage.setData(key, value);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  }
+  async function storageGet(key) {
+    if (isNeutralino()) {
+      try {
+        const value = await Neutralino.storage.getData(key);
+        return value || null;
+      } catch {
+        return null;
+      }
+    } else {
+      return localStorage.getItem(key);
+    }
+  }
+  async function storageRemove(key) {
+    if (isNeutralino()) {
+      await Neutralino.storage.setData(key, "");
+    } else {
+      localStorage.removeItem(key);
+    }
+  }
+  var updateFileNameCallback = null;
+  var applyLoadedDataCallback = null;
+  async function saveToNeutralino(context2) {
+    const { state } = context2;
+    const platformState = asPlatformState(state);
+    const data = exportToObsidianCanvas(state);
+    try {
+      const filePath = await Neutralino.os.showSaveDialog("Canvas\u30D5\u30A1\u30A4\u30EB\u3092\u4FDD\u5B58", {
+        filters: [{ name: "Canvas File", extensions: ["json", "8bc"] }]
+      });
+      if (filePath) {
+        await Neutralino.filesystem.writeFile(filePath, data);
+        platformState.neutralinoFilePath = filePath;
+        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+        updateFileNameCallback?.(state);
+        await startFileWatcher(context2);
+      }
+    } catch (err) {
+      console.error("NeutralinoJS save error:", err);
+    }
+  }
+  async function saveToOverwriteNeutralino(context2) {
+    const { state } = context2;
+    const platformState = asPlatformState(state);
+    if (!platformState.neutralinoFilePath) {
+      await saveToNeutralino(context2);
+      return;
+    }
+    const data = exportToObsidianCanvas(state);
+    try {
+      await Neutralino.filesystem.writeFile(platformState.neutralinoFilePath, data);
+      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      await startFileWatcher(context2);
+    } catch (err) {
+      console.error("NeutralinoJS overwrite error:", err);
+    }
+  }
+  async function loadFromNeutralino(context2) {
+    try {
+      const filePaths = await Neutralino.os.showOpenDialog("Canvas\u30D5\u30A1\u30A4\u30EB\u3092\u958B\u304F", {
+        filters: [{ name: "Canvas File", extensions: ["json", "8bc"] }],
+        multiple: false
+      });
+      if (filePaths && filePaths.length > 0) {
+        const filePath = filePaths[0];
+        const data = await Neutralino.filesystem.readFile(filePath);
+        applyLoadedDataCallback?.(data, context2, { neutralinoFilePath: filePath });
+      }
+    } catch (err) {
+      console.error("NeutralinoJS load error:", err);
+    }
+  }
+  async function startFileWatcher(context2) {
+    const { state } = context2;
+    const platformState = asPlatformState(state);
+    if (!isNeutralino() || !platformState.neutralinoFilePath) return;
+    await stopFileWatcher(context2);
+    try {
+      const pathParts = await Neutralino.filesystem.getPathParts(platformState.neutralinoFilePath);
+      const dirPath = pathParts.parentPath;
+      const fileName = pathParts.filename;
+      const watcherId = await Neutralino.filesystem.createWatcher(dirPath);
+      platformState.neutralinoWatcherId = watcherId;
+      Neutralino.events.on("watchFile", (event) => {
+        if (event.detail.id === watcherId && event.detail.action === "modified") {
+          const changedFile = event.detail.filename;
+          if (changedFile === fileName) {
+            reloadCurrentFile(context2);
+          }
+        }
+      });
+      console.log("File watcher started for directory:", dirPath, "(watching:", fileName, ")");
+    } catch (err) {
+      console.warn("File watcher not available:", err.message || err);
+    }
+  }
+  async function stopFileWatcher(context2) {
+    const { state } = context2;
+    const platformState = asPlatformState(state);
+    if (!isNeutralino() || platformState.neutralinoWatcherId === null) return;
+    try {
+      await Neutralino.filesystem.removeWatcher(platformState.neutralinoWatcherId);
+      platformState.neutralinoWatcherId = null;
+      console.log("File watcher stopped");
+    } catch (err) {
+      console.error("Stop file watcher error:", err);
+    }
+  }
+  async function reloadCurrentFile(context2) {
+    const { state } = context2;
+    const platformState = asPlatformState(state);
+    if (!isNeutralino() || !platformState.neutralinoFilePath) return;
+    try {
+      const data = await Neutralino.filesystem.readFile(platformState.neutralinoFilePath);
+      const parsed = JSON.parse(data);
+      loadFromJson(parsed, state);
+      updateFileNameCallback?.(state);
+    } catch (err) {
+      console.error("Reload file error:", err);
+    }
+  }
+  function initNeutralino(context2) {
+    if (!isNeutralino()) return;
+    Neutralino.init();
+    Neutralino.events.on("ready", () => {
+      console.log("NeutralinoJS initialized");
+      Neutralino.window.setTitle("TinyTidyCanvas");
+      const platformState = context2.state;
+      if (platformState.neutralinoFilePath) {
+        startFileWatcher(context2);
+      }
+    });
+  }
+
+  // src/app.ts
+  function updateFileName(state, fileName) {
+    const el = document.getElementById("file-name");
+    if (!el) return;
+    if (fileName) {
+      el.textContent = fileName;
+    } else if (state.neutralinoFilePath) {
+      const parts = state.neutralinoFilePath.replace(/\\/g, "/").split("/");
+      el.textContent = parts[parts.length - 1];
+    } else {
+      el.textContent = "\u65B0\u898F";
+    }
+  }
+  function applyLoadedData(data, context2, options) {
+    const { state } = context2;
+    try {
+      const parsed = JSON.parse(data);
+      loadFromJson2(parsed, context2);
+      state.neutralinoFilePath = options?.neutralinoFilePath ?? null;
+      updateFileName(state, options?.fileName);
+      if (state.neutralinoFilePath) {
+        startFileWatcher(context2);
+      }
+    } catch (err) {
+      alert("\u30D5\u30A1\u30A4\u30EB\u306E\u5F62\u5F0F\u304C\u6B63\u3057\u304F\u3042\u308A\u307E\u305B\u3093");
+    }
+  }
+  function handleDrop(e, context2) {
+    e.preventDefault();
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "json" && ext !== "8bc") return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      applyLoadedData(reader.result, context2, { fileName: file.name });
+    };
+    reader.readAsText(file);
+  }
+  var _app = {
+    document,
+    canvas: document.getElementById("canvas"),
+    ctx: document.getElementById("canvas").getContext("2d"),
+    fileInput: document.getElementById("file-input")
   };
   var _state = {
     nodes: [],
@@ -389,21 +485,6 @@
     neutralinoWatcherId: null
   };
   var context = { state: _state, app: _app };
-  function findFreePosition(state, x, y, width, height) {
-    const offset = PIXEL_SIZE * 8;
-    const maxAttempts = 20;
-    for (let i = 0; i < maxAttempts; i++) {
-      const checkX = x - width / 2 + i % 5 * offset * Math.floor(i / 5);
-      const checkY = y - height / 2 + Math.floor(i / 5) * offset;
-      const occupied = state.nodes.some((n) => {
-        return !(checkX + width < n.x || checkX > n.x + n.width || checkY + height < n.y || checkY > n.y + n.height);
-      });
-      if (!occupied) {
-        return { x: checkX, y: checkY };
-      }
-    }
-    return { x: x - width / 2, y: y - height / 2 };
-  }
   function resizeCanvasWithRender(app) {
     resizeCanvas(app);
     render();
@@ -449,9 +530,6 @@
     ctx.moveTo(0, origin.y);
     ctx.lineTo(canvas.width, origin.y);
     ctx.stroke();
-  }
-  function snapToPixel(val, pixelSize) {
-    return Math.round(val / pixelSize) * pixelSize;
   }
   function drawPixelRect(ctx, x, y, w, h, pixelSize, cornerSize = 0) {
     if (cornerSize > 0) {
@@ -662,7 +740,7 @@
       const alpha = 1 - state.edgeDeleteAnimation.progress;
       ctx.globalAlpha = alpha;
       ctx.fillStyle = "#ffffff";
-      state.edgeDeleteAnimation.dots.forEach((dot) => {
+      state.edgeDeleteAnimation.dots?.forEach((dot) => {
         ctx.fillRect(snapToPixel(dot.x, pixelSize), snapToPixel(dot.y, pixelSize), pixelSize, pixelSize);
       });
       ctx.globalAlpha = 1;
@@ -1127,39 +1205,6 @@
       alert("SHIFT\u62BC\u3057\u306A\u304C\u30892\u3064\u3001\u307E\u305F\u306F1\u3064\u306E\u30CE\u30FC\u30C9\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044");
     }
   }
-  function exportToObsidianCanvas(state) {
-    const data = {
-      nodes: state.nodes.map((n) => ({
-        id: n.id,
-        type: n.type === "dot" ? "text" : n.type,
-        x: Math.round(n.x),
-        y: Math.round(n.y),
-        width: n.width,
-        height: n.height,
-        text: n.text || "",
-        bg: state.colorPalettes[n.bgPaletteIndex] || "#000000",
-        color: "#ffffff",
-        textAlign: n.textAlign,
-        textValign: n.textValign
-      })),
-      edges: state.edges.map((e) => ({
-        id: e.id,
-        fromNode: e.fromNode,
-        toNode: e.toNode,
-        fromSide: e.fromSide || "bottom",
-        toSide: e.toSide || "top",
-        arrowStart: e.arrowStart || false,
-        arrowEnd: e.arrowEnd || false
-      })),
-      colorPalettes: state.colorPalettes,
-      viewport: {
-        x: -state.offset.x / state.zoom,
-        y: -state.offset.y / state.zoom,
-        zoom: state.zoom
-      }
-    };
-    return JSON.stringify(data, null, 2);
-  }
   async function saveToFile(context2) {
     const { state } = context2;
     const data = exportToObsidianCanvas(state);
@@ -1315,7 +1360,7 @@
     }
     _app.fileInput.click();
   }
-  function loadFromJson(data, context2) {
+  function loadFromJson2(data, context2) {
     const { state } = context2;
     if (data.nodes) {
       state.nodes = data.nodes.map((n) => {
@@ -1836,16 +1881,7 @@
       await storageRemove(STORAGE_KEYS.DEV_MODE);
       location.reload();
     });
-    if (isNeutralino()) {
-      Neutralino.init();
-      Neutralino.events.on("ready", () => {
-        console.log("NeutralinoJS initialized");
-        Neutralino.window.setTitle("TinyTidyCanvas");
-        if (_state.neutralinoFilePath) {
-          startFileWatcher(context2);
-        }
-      });
-    }
+    initNeutralino(context2);
   }
   function startEdgeAnimation() {
     if (!_state.edgeAnimation) return;
@@ -1878,7 +1914,7 @@
     const dy = to.y - from.y;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      _state.edgeDeleteAnimation.dots.push({
+      _state.edgeDeleteAnimation.dots?.push({
         x: from.x + dx * t,
         y: from.y + dy * t,
         vx: (Math.random() - 0.5) * 2,
@@ -1888,7 +1924,7 @@
     const animate = () => {
       if (!_state.edgeDeleteAnimation) return;
       _state.edgeDeleteAnimation.progress += 0.025;
-      _state.edgeDeleteAnimation.dots.forEach((dot) => {
+      _state.edgeDeleteAnimation.dots?.forEach((dot) => {
         dot.x += dot.vx;
         dot.y += dot.vy;
         dot.vy += 0.1;

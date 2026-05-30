@@ -12,151 +12,43 @@ import {
   calcTextRectSize
 } from './util';
 
-// NeutralinoJS type declarations
-declare const Neutralino: {
-  init: () => void;
-  filesystem: {
-    writeFile: (filename: string, data: string) => Promise<void>;
-    readFile: (filename: string) => Promise<string>;
-    createWatcher: (path: string) => Promise<number>;
-    removeWatcher: (watcherId: number) => Promise<void>;
-    getPathParts: (path: string) => Promise<{ parentPath: string; filename: string; stem: string; extension: string }>;
-  };
-  os: {
-    showSaveDialog: (title: string, options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
-    showOpenDialog: (title: string, options?: { filters?: { name: string; extensions: string[] }[]; multiple?: boolean }) => Promise<string[] | null>;
-  };
-  storage: {
-    setData: (key: string, data: string) => Promise<void>;
-    getData: (key: string) => Promise<string>;
-  };
-  window: {
-    setTitle: (title: string) => Promise<void>;
-  };
-  events: {
-    on: (eventName: string, callback: (event: any) => void) => void;
-  };
-};
+import {
+  CanvasNode,
+  Edge,
+  CoreState,
+  App,
+  HistoryManager,
+  AnimationState,
+  NodeDeleteAnimation,
+  NodeCreateAnimation,
+  TEXT_NODE_DEFAULT,
+  HORIZONTAL_PADDING,
+  VERTICAL_PADDING,
+  LINE_HEIGHT,
+  PIXEL_SIZE,
+  NEW_CANVAS_INITIAL_OFFSET,
+  findFreePosition,
+  snapToPixel,
+  exportToObsidianCanvas
+} from './domain';
 
-function isNeutralino(): boolean {
-  try {
-    return typeof Neutralino !== 'undefined' && Neutralino !== null && typeof Neutralino.init === 'function';
-  } catch {
-    return false;
-  }
-}
-
-async function saveToNeutralino(context: Context): Promise<void> {
-  const { state } = context;
-  const data = exportToObsidianCanvas(state);
-
-  try {
-    const filePath = await Neutralino.os.showSaveDialog('Canvasファイルを保存', {
-      filters: [{ name: 'Canvas File', extensions: ['json', '8bc'] }]
-    });
-
-    if (filePath) {
-      await Neutralino.filesystem.writeFile(filePath, data);
-      state.neutralinoFilePath = filePath;
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
-      updateFileName(state);
-      await startFileWatcher(context);
-    }
-  } catch (err) {
-    console.error('NeutralinoJS save error:', err);
-  }
-}
-
-async function saveToOverwriteNeutralino(context: Context): Promise<void> {
-  const { state } = context;
-  if (!state.neutralinoFilePath) {
-    await saveToNeutralino(context);
-    return;
-  }
-  const data = exportToObsidianCanvas(state);
-  try {
-    await Neutralino.filesystem.writeFile(state.neutralinoFilePath, data);
-    await storageSet(STORAGE_KEYS.AUTOSAVE, data);
-    await startFileWatcher(context);
-  } catch (err) {
-    console.error('NeutralinoJS overwrite error:', err);
-  }
-}
-
-async function loadFromNeutralino(context: Context): Promise<void> {
-  try {
-    const filePaths = await Neutralino.os.showOpenDialog('Canvasファイルを開く', {
-      filters: [{ name: 'Canvas File', extensions: ['json', '8bc'] }],
-      multiple: false
-    });
-
-    if (filePaths && filePaths.length > 0) {
-      const filePath = filePaths[0];
-      const data = await Neutralino.filesystem.readFile(filePath);
-      applyLoadedData(data, context, { neutralinoFilePath: filePath });
-    }
-  } catch (err) {
-    console.error('NeutralinoJS load error:', err);
-  }
-}
-
-async function startFileWatcher(context: Context): Promise<void> {
-  const { state } = context;
-  if (!isNeutralino() || !state.neutralinoFilePath) return;
-
-  // 既存のウォッチャーを停止
-  await stopFileWatcher(context);
-
-  try {
-    // createWatcherはディレクトリを監視するため、ファイルの親ディレクトリを取得
-    const pathParts = await Neutralino.filesystem.getPathParts(state.neutralinoFilePath);
-    const dirPath = pathParts.parentPath;
-    const fileName = pathParts.filename;
-
-    const watcherId = await Neutralino.filesystem.createWatcher(dirPath);
-    state.neutralinoWatcherId = watcherId;
-
-    Neutralino.events.on('watchFile', (event: any) => {
-      if (event.detail.id === watcherId && event.detail.action === 'modified') {
-        const changedFile = event.detail.filename;
-        if (changedFile === fileName) {
-          reloadCurrentFile(context);
-        }
-      }
-    });
-
-    console.log('File watcher started for directory:', dirPath, '(watching:', fileName, ')');
-  } catch (err) {
-    console.warn('File watcher not available:', (err as any).message || err);
-  }
-}
-
-async function stopFileWatcher(context: Context): Promise<void> {
-  const { state } = context;
-  if (!isNeutralino() || state.neutralinoWatcherId === null) return;
-
-  try {
-    await Neutralino.filesystem.removeWatcher(state.neutralinoWatcherId);
-    state.neutralinoWatcherId = null;
-    console.log('File watcher stopped');
-  } catch (err) {
-    console.error('Stop file watcher error:', err);
-  }
-}
-
-async function reloadCurrentFile(context: Context): Promise<void> {
-  const { state } = context;
-  if (!isNeutralino() || !state.neutralinoFilePath) return;
-
-  try {
-    const data = await Neutralino.filesystem.readFile(state.neutralinoFilePath);
-    const parsed = JSON.parse(data);
-    loadFromJson(parsed, context);
-    updateFileName(state);
-  } catch (err) {
-    console.error('Reload file error:', err);
-  }
-}
+import {
+  PlatformState,
+  Context,
+  STORAGE_KEYS,
+  isNeutralino,
+  storageSet,
+  storageGet,
+  storageRemove,
+  saveToNeutralino,
+  saveToOverwriteNeutralino,
+  loadFromNeutralino,
+  startFileWatcher,
+  stopFileWatcher,
+  initNeutralino,
+  setUpdateFileNameCallback,
+  setApplyLoadedDataCallback
+} from './platform';
 
 function updateFileName(state: State, fileName?: string): void {
   const el = document.getElementById('file-name');
@@ -210,191 +102,19 @@ function handleDrop(e: DragEvent, context: Context): void {
   reader.readAsText(file);
 }
 
-const STORAGE_KEYS = {
-  AUTOSAVE: 'tinytidycanvas-autosave',
-  DEV_MODE: 'tinytidycanvas-dev'
-} as const;
+// State is PlatformState (extends CoreState with platform-specific fields)
+type State = PlatformState;
 
-async function storageSet(key: string, value: string): Promise<void> {
-  if (isNeutralino()) {
-    await Neutralino.storage.setData(key, value);
-  } else {
-    localStorage.setItem(key, value);
-  }
-}
+// App and Context are re-exported from domain.ts
+type AppState = App;
+type ContextState = Context;
 
-async function storageGet(key: string): Promise<string | null> {
-  if (isNeutralino()) {
-    try {
-      const value = await Neutralino.storage.getData(key);
-      return value || null;
-    } catch {
-      return null;
-    }
-  } else {
-    return localStorage.getItem(key);
-  }
-}
-
-async function storageRemove(key: string): Promise<void> {
-  if (isNeutralino()) {
-    // NeutralinoJSのstorage APIにはremoveItemがないため空文字を保存
-    // storageGetでは空文字をnullとして扱う
-    await Neutralino.storage.setData(key, '');
-  } else {
-    localStorage.removeItem(key);
-  }
-}
-
-const TEXT_NODE_DEFAULT = {
-  width: 120,
-  height: 60
-} as const;
-
-const HORIZONTAL_PADDING = 18;
-const VERTICAL_PADDING = 16;
-const LINE_HEIGHT = 18;
-const PIXEL_SIZE = 4;
-
-/** 新規作成時の2つのテキストノードを中央から左右に離すオフセット */
-const NEW_CANVAS_INITIAL_OFFSET = PIXEL_SIZE * 16;
-
-interface CanvasNode extends Figure {
-  id: string;
-  text?: string;
-  textAlign?: 'left' | 'center' | 'right';
-  textValign?: 'top' | 'middle' | 'bottom';
-  bgPaletteIndex: number;
-  bgTransparent: boolean;
-  strokeTransparent: boolean;
-  autoResize: boolean;
-}
-
-interface Edge {
-  id: string;
-  fromNode: string;
-  toNode: string;
-  fromSide: string;
-  toSide: string;
-  arrowStart: boolean;
-  arrowEnd: boolean;
-}
-
-interface State {
-  nodes: CanvasNode[];
-  edges: Edge[];
-  selectedNode: CanvasNode | null;
-  selectedNodes: CanvasNode[];
-  selectedEdge: Edge | null;
-  lastSelectedNode: CanvasNode | null;
-  mode: string;
-  zoom: number;
-  offset: Point;
-  isDragging: boolean;
-  isResizing: boolean;
-  dragStart: Point;
-  resizeNode: CanvasNode | null;
-  resizeStart: Point | null;
-  resizeStartSize: { width: number; height: number } | null;
-  dragOffset: Point;
-  historyManager: HistoryManager;
-  colorPalettes: string[];
-  selectedPaletteIndex: number;
-  editingPaletteIndex: number | undefined;
-  editingPaletteType: string | undefined;
-  edgeAnimation: { fromNode: string, toNode: string, progress: number } | null;
-  edgeDeleteAnimation: { fromNode: string, toNode: string, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
-  nodeDeleteAnimation: { node: CanvasNode, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
-  nodeCreateAnimation: { nodeId: string, progress: number } | null;
-  fileHandle: FileSystemFileHandle | null;
-  neutralinoFilePath: string | null;
-  neutralinoWatcherId: number | null;
-}
-
-interface App {
-  document: Document;
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  fileInput: HTMLInputElement;
-}
-
-interface Context {
-  state: State;
-  app: App;
-}
-
-const _app: App = {
+const _app: AppState = {
   document: document,
   canvas: document.getElementById('canvas') as HTMLCanvasElement,
   ctx: (document.getElementById('canvas') as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D,
   fileInput: document.getElementById('file-input') as HTMLInputElement
 };
-
-class HistoryManager {
-  private history: string[] = [];
-  private historyIndex: number = -1;
-  private maxSize: number;
-
-  constructor(maxSize: number = 50) {
-    this.maxSize = maxSize;
-  }
-
-  save(state: State): void {
-    this.history = this.history.slice(0, this.historyIndex + 1);
-    this.history.push(JSON.stringify({
-      nodes: state.nodes,
-      edges: state.edges,
-      colorPalettes: state.colorPalettes
-    }));
-    this.historyIndex++;
-    if (this.history.length > this.maxSize) {
-      this.history.shift();
-      this.historyIndex--;
-    }
-    const data = JSON.stringify({
-      nodes: state.nodes,
-      edges: state.edges,
-      colorPalettes: state.colorPalettes,
-      neutralinoFilePath: state.neutralinoFilePath
-    });
-    storageSet(STORAGE_KEYS.AUTOSAVE, data);
-  }
-
-  undo(state: State): boolean {
-    if (this.historyIndex > 0) {
-      this.historyIndex--;
-      this.restore(state);
-      return true;
-    }
-    return false;
-  }
-
-  redo(state: State): boolean {
-    if (this.historyIndex < this.history.length - 1) {
-      this.historyIndex++;
-      this.restore(state);
-      return true;
-    }
-    return false;
-  }
-
-  private restore(state: State): void {
-    const data = JSON.parse(this.history[this.historyIndex]);
-    state.nodes = data.nodes;
-    state.edges = data.edges;
-    if (data.colorPalettes) state.colorPalettes = data.colorPalettes;
-    state.selectedNode = null;
-    state.selectedEdge = null;
-  }
-
-  canUndo(): boolean {
-    return this.historyIndex > 0;
-  }
-
-  canRedo(): boolean {
-    return this.historyIndex < this.history.length - 1;
-  }
-}
 
 const _state: State = {
   nodes: [],
@@ -432,27 +152,6 @@ const _state: State = {
 };
 
 const context: Context = { state: _state, app: _app };
-
-function findFreePosition(state: State, x: number, y: number, width: number, height: number): Point {
-  const offset = PIXEL_SIZE * 8;
-  const maxAttempts = 20;
-  
-  for (let i = 0; i < maxAttempts; i++) {
-    const checkX = x - width / 2 + (i % 5) * offset * Math.floor(i / 5);
-    const checkY = y - height / 2 + Math.floor(i / 5) * offset;
-    
-    const occupied = state.nodes.some(n => {
-      return !(checkX + width < n.x || checkX > n.x + n.width ||
-               checkY + height < n.y || checkY > n.y + n.height);
-    });
-    
-    if (!occupied) {
-      return { x: checkX, y: checkY };
-    }
-  }
-  
-  return { x: x - width / 2, y: y - height / 2 };
-}
 
 function resizeCanvasWithRender(app: App) {
   resizeCanvas(app);
@@ -506,10 +205,6 @@ function drawGrid(app: App, state: State): void {
   ctx.moveTo(0, origin.y);
   ctx.lineTo(canvas.width, origin.y);
   ctx.stroke();
-}
-
-function snapToPixel(val: number, pixelSize: number): number {
-  return Math.round(val / pixelSize) * pixelSize;
 }
 
 function drawPixelRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, pixelSize: number, cornerSize: number = 0): void {
@@ -810,7 +505,7 @@ function renderFull(context: Context): void {
     const alpha = 1 - state.edgeDeleteAnimation.progress;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#ffffff';
-    state.edgeDeleteAnimation.dots.forEach(dot => {
+    state.edgeDeleteAnimation.dots?.forEach(dot => {
       ctx.fillRect(snapToPixel(dot.x, pixelSize), snapToPixel(dot.y, pixelSize), pixelSize, pixelSize);
     });
     ctx.globalAlpha = 1;
@@ -1347,40 +1042,6 @@ function addEdgeNode(state: State): void {
   } else {
     alert('SHIFT押しながら2つ、または1つのノードを選択してください');
   }
-}
-
-function exportToObsidianCanvas(state: State): string {
-  const data = {
-    nodes: state.nodes.map(n => ({
-      id: n.id,
-      type: n.type === 'dot' ? 'text' : n.type,
-      x: Math.round(n.x),
-      y: Math.round(n.y),
-      width: n.width,
-      height: n.height,
-      text: n.text || '',
-      bg: state.colorPalettes[n.bgPaletteIndex] || '#000000',
-      color: '#ffffff',
-      textAlign: n.textAlign,
-      textValign: n.textValign
-    })),
-    edges: state.edges.map(e => ({
-      id: e.id,
-      fromNode: e.fromNode,
-      toNode: e.toNode,
-      fromSide: e.fromSide || 'bottom',
-      toSide: e.toSide || 'top',
-      arrowStart: e.arrowStart || false,
-      arrowEnd: e.arrowEnd || false
-    })),
-    colorPalettes: state.colorPalettes,
-    viewport: {
-      x: -state.offset.x / state.zoom,
-      y: -state.offset.y / state.zoom,
-      zoom: state.zoom
-    }
-  };
-  return JSON.stringify(data, null, 2);
 }
 
 async function saveToFile(context: Context): Promise<void> {
@@ -2132,16 +1793,7 @@ function initApp(context: Context): void {
   });
 
   // NeutralinoJS初期化
-  if (isNeutralino()) {
-    Neutralino.init();
-    Neutralino.events.on('ready', () => {
-      console.log('NeutralinoJS initialized');
-      Neutralino.window.setTitle('TinyTidyCanvas');
-      if (_state.neutralinoFilePath) {
-        startFileWatcher(context);
-      }
-    });
-  }
+  initNeutralino(context);
 }
 
 function startEdgeAnimation(): void {
@@ -2176,7 +1828,7 @@ function startEdgeDeleteAnimation(): void {
   const dy = to.y - from.y;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    _state.edgeDeleteAnimation.dots.push({
+    _state.edgeDeleteAnimation.dots?.push({
       x: from.x + dx * t,
       y: from.y + dy * t,
       vx: (Math.random() - 0.5) * 2,
@@ -2187,7 +1839,7 @@ function startEdgeDeleteAnimation(): void {
   const animate = () => {
     if (!_state.edgeDeleteAnimation) return;
     _state.edgeDeleteAnimation.progress += 0.025;
-    _state.edgeDeleteAnimation.dots.forEach(dot => {
+    _state.edgeDeleteAnimation.dots?.forEach(dot => {
       dot.x += dot.vx;
       dot.y += dot.vy;
       dot.vy += 0.1;

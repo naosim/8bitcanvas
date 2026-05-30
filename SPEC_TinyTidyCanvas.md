@@ -228,3 +228,98 @@ const _state: State = {
 
 const context: Context = { state: _state, app: _app };
 ```
+
+## NeutralinoJS デスクトップアプリ化
+
+### 技術スタック
+- NeutralinoJS v6.7.0
+- プロジェクトルートに `neutralino.config.json`
+- リソース: `resources/` ディレクトリ
+
+### ビルド・実行
+```bash
+npm run desktop:run     # 開発実行 (neu run)
+npm run desktop:build   # 配布ビルド (neu build)
+```
+
+### 設定の要点 (neutralino.config.json)
+```json
+{
+  "documentRoot": "/resources/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "modes": {
+    "window": {
+      "exitProcessOnClose": true,
+      "injectClientLibrary": true
+    }
+  }
+}
+```
+
+### NeutralinoJS の仕様メモ（再利用向け）
+
+#### Neutralino.init() は Promise を返さない
+- `Neutralino.init()` の戻り値は `void`（Promise ではない）
+- `.then() チェーンは使えない`
+- 初期化完了は `Neutralino.events.on('ready', () => {})` で監視する
+
+#### クライアントライブラリの注入
+- `injectClientLibrary: true` を設定しないと `Neutralino` オブジェクトが `undefined` になる
+- HTML に `<script src="neutralino.js">` を手動で書いても、サーバーが自動注入と競合して `init()` が壊れる
+- **`injectClientLibrary: true` を使うのが正解**
+
+#### ファイルシステム API
+
+| API | 動作 |
+|-----|------|
+| `filesystem.readFile(path)` | テキスト読み込み |
+| `filesystem.writeFile(path, data)` | テキスト書き込み |
+| `filesystem.createWatcher(path)` | **ディレクトリを監視**（ファイル不可） |
+| `filesystem.removeWatcher(id)` | ウォッチャー停止 |
+| `filesystem.getPathParts(path)` | パス分解（parentPath, filename 等） |
+
+#### ファイルウォッチングの注意点
+- `createWatcher` は**ディレクトリパス**を渡す。ファイルパスを渡すと失敗する
+- イベント名: `watchFile`
+- イベント詳細の構造:
+  ```json
+  {
+    "action": "modified",
+    "dir": "C:/path/to/dir",
+    "filename": "file.json",
+    "id": 1,
+    "timestamp": "2026-05-30T03:21:17.146Z"
+  }
+  ```
+- **`action` は `"modified"`（`"update"` ではない）**
+- ファイル名は `event.detail.filename`（`event.detail.path` や `event.detail.vars.entry` ではない）
+- 監視対象ファイルのフィルタリングが必要（ディレクトリ内の全ファイルにイベントが飛ぶ）
+
+#### ダイアログ API
+
+| API | 戻り値 |
+|-----|--------|
+| `os.showSaveDialog(title, options)` | ファイルパス or `null` |
+| `os.showOpenDialog(title, options)` | パス配列 or `null` |
+
+#### 環境判定
+```typescript
+function isNeutralino(): boolean {
+  try {
+    return typeof Neutralino !== 'undefined' &&
+           Neutralino !== null &&
+           typeof Neutralino.init === 'function';
+  } catch {
+    return false;
+  }
+}
+```
+- `typeof` チェック + `init` 関数存在チェックの両方が必要
+- try-catch で囲むと安全（未定義変数アクセス時のエラーを防止）
+
+### 今後の開発で使うときのチェックリスト
+1. `neutralino.config.json` に `injectClientLibrary: true` を入れるか確認
+2. HTML から `<script src="neutralino.js">` を削除する
+3. `Neutralino.init()` は `.then()` で繋げない
+4. ファイル監視はディレクトリ単位で行い、`action:"modified"` と `event.detail.filename` でフィルタする

@@ -22,4 +22,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Copy bundle to resources for NeutralinoJS
+cp dist/bundle.js resources/
+
 echo "Build complete: dist/bundle.js"

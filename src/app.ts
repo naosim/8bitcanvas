@@ -12,6 +12,188 @@ import {
   calcTextRectSize
 } from './util';
 
+// NeutralinoJS type declarations
+declare const Neutralino: {
+  init: () => void;
+  filesystem: {
+    writeFile: (filename: string, data: string) => Promise<void>;
+    readFile: (filename: string) => Promise<string>;
+    createWatcher: (path: string) => Promise<number>;
+    removeWatcher: (watcherId: number) => Promise<void>;
+    getPathParts: (path: string) => Promise<{ parentPath: string; filename: string; stem: string; extension: string }>;
+  };
+  os: {
+    showSaveDialog: (title: string, options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+    showOpenDialog: (title: string, options?: { filters?: { name: string; extensions: string[] }[]; multiple?: boolean }) => Promise<string[] | null>;
+  };
+  storage: {
+    setData: (key: string, data: string) => Promise<void>;
+    getData: (key: string) => Promise<string>;
+  };
+  window: {
+    setTitle: (title: string) => Promise<void>;
+  };
+  events: {
+    on: (eventName: string, callback: (event: any) => void) => void;
+  };
+};
+
+function isNeutralino(): boolean {
+  try {
+    return typeof Neutralino !== 'undefined' && Neutralino !== null && typeof Neutralino.init === 'function';
+  } catch {
+    return false;
+  }
+}
+
+async function saveToNeutralino(context: Context): Promise<void> {
+  const { state } = context;
+  const data = exportToObsidianCanvas(state);
+
+  try {
+    const filePath = await Neutralino.os.showSaveDialog('Canvasファイルを保存', {
+      filters: [{ name: 'Canvas File', extensions: ['json', '8bc'] }]
+    });
+
+    if (filePath) {
+      await Neutralino.filesystem.writeFile(filePath, data);
+      state.neutralinoFilePath = filePath;
+      localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
+      updateFileName(state);
+      await startFileWatcher(context);
+    }
+  } catch (err) {
+    console.error('NeutralinoJS save error:', err);
+  }
+}
+
+async function loadFromNeutralino(context: Context): Promise<void> {
+  try {
+    const filePaths = await Neutralino.os.showOpenDialog('Canvasファイルを開く', {
+      filters: [{ name: 'Canvas File', extensions: ['json', '8bc'] }],
+      multiple: false
+    });
+
+    if (filePaths && filePaths.length > 0) {
+      const filePath = filePaths[0];
+      const data = await Neutralino.filesystem.readFile(filePath);
+      applyLoadedData(data, context, { neutralinoFilePath: filePath });
+    }
+  } catch (err) {
+    console.error('NeutralinoJS load error:', err);
+  }
+}
+
+async function startFileWatcher(context: Context): Promise<void> {
+  const { state } = context;
+  if (!isNeutralino() || !state.neutralinoFilePath) return;
+
+  // 既存のウォッチャーを停止
+  await stopFileWatcher(context);
+
+  try {
+    // createWatcherはディレクトリを監視するため、ファイルの親ディレクトリを取得
+    const pathParts = await Neutralino.filesystem.getPathParts(state.neutralinoFilePath);
+    const dirPath = pathParts.parentPath;
+    const fileName = pathParts.filename;
+
+    const watcherId = await Neutralino.filesystem.createWatcher(dirPath);
+    state.neutralinoWatcherId = watcherId;
+
+    Neutralino.events.on('watchFile', (event: any) => {
+      if (event.detail.id === watcherId && event.detail.action === 'modified') {
+        const changedFile = event.detail.filename;
+        if (changedFile === fileName) {
+          reloadCurrentFile(context);
+        }
+      }
+    });
+
+    console.log('File watcher started for directory:', dirPath, '(watching:', fileName, ')');
+  } catch (err) {
+    console.warn('File watcher not available:', (err as any).message || err);
+  }
+}
+
+async function stopFileWatcher(context: Context): Promise<void> {
+  const { state } = context;
+  if (!isNeutralino() || state.neutralinoWatcherId === null) return;
+
+  try {
+    await Neutralino.filesystem.removeWatcher(state.neutralinoWatcherId);
+    state.neutralinoWatcherId = null;
+    console.log('File watcher stopped');
+  } catch (err) {
+    console.error('Stop file watcher error:', err);
+  }
+}
+
+async function reloadCurrentFile(context: Context): Promise<void> {
+  const { state } = context;
+  if (!isNeutralino() || !state.neutralinoFilePath) return;
+
+  try {
+    const data = await Neutralino.filesystem.readFile(state.neutralinoFilePath);
+    const parsed = JSON.parse(data);
+    loadFromJson(parsed, context);
+    updateFileName(state);
+  } catch (err) {
+    console.error('Reload file error:', err);
+  }
+}
+
+function updateFileName(state: State, fileName?: string): void {
+  const el = document.getElementById('file-name');
+  if (!el) return;
+
+  if (fileName) {
+    el.textContent = fileName;
+  } else if (state.neutralinoFilePath) {
+    const parts = state.neutralinoFilePath.replace(/\\/g, '/').split('/');
+    el.textContent = parts[parts.length - 1];
+  } else {
+    el.textContent = '新規';
+  }
+}
+
+function applyLoadedData(
+  data: string,
+  context: Context,
+  options?: {
+    fileName?: string;
+    neutralinoFilePath?: string | null;
+  }
+): void {
+  const { state } = context;
+  try {
+    const parsed = JSON.parse(data);
+    loadFromJson(parsed, context);
+    state.neutralinoFilePath = options?.neutralinoFilePath ?? null;
+    updateFileName(state, options?.fileName);
+    if (state.neutralinoFilePath && isNeutralino()) {
+      startFileWatcher(context);
+    }
+  } catch (err) {
+    alert('ファイルの形式が正しくありません');
+  }
+}
+
+function handleDrop(e: DragEvent, context: Context): void {
+  e.preventDefault();
+  const files = e.dataTransfer?.files;
+  if (!files || files.length === 0) return;
+
+  const file = files[0];
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (ext !== 'json' && ext !== '8bc') return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    applyLoadedData(reader.result as string, context, { fileName: file.name });
+  };
+  reader.readAsText(file);
+}
+
 const STORAGE_KEYS = {
   AUTOSAVE: 'tinytidycanvas-autosave',
   DEV_MODE: 'tinytidycanvas-dev'
@@ -78,6 +260,8 @@ interface State {
   nodeDeleteAnimation: { node: CanvasNode, progress: number, dots: { x: number, y: number, vx: number, vy: number }[] } | null;
   nodeCreateAnimation: { nodeId: string, progress: number } | null;
   fileHandle: FileSystemFileHandle | null;
+  neutralinoFilePath: string | null;
+  neutralinoWatcherId: number | null;
 }
 
 interface App {
@@ -194,7 +378,9 @@ const _state: State = {
   edgeDeleteAnimation: null,
   nodeDeleteAnimation: null,
   nodeCreateAnimation: null,
-  fileHandle: null
+  fileHandle: null,
+  neutralinoFilePath: null,
+  neutralinoWatcherId: null
 };
 
 const context: Context = { state: _state, app: _app };
@@ -756,6 +942,10 @@ function createNew(state: State): void {
   state.zoom = 1;
   state.offset = { x: 0, y: 0 };
   state.fileHandle = null;
+  state.neutralinoFilePath = null;
+  // ファイルウォッチング停止（非同期、結果を待たない）
+  stopFileWatcher({ state, app: _app }).catch(() => {});
+  updateFileName(state);
 
   const textA: CanvasNode = {
     id: 'node-start',
@@ -1149,6 +1339,12 @@ async function saveToFile(context: Context): Promise<void> {
   const { state } = context;
   const data = exportToObsidianCanvas(state);
 
+  // NeutralinoJS環境の場合はネイティブAPIを使用
+  if (isNeutralino()) {
+    await saveToNeutralino(context);
+    return;
+  }
+
   if ('showSaveFilePicker' in window) {
     try {
       if (state.fileHandle) {
@@ -1161,7 +1357,7 @@ async function saveToFile(context: Context): Promise<void> {
       const handle = await (window as any).showSaveFilePicker({
         types: [{
           description: 'Canvas File',
-          accept: { 'application/json': ['.json', '.canvas'] }
+          accept: { 'application/json': ['.json', '.8bc'] }
         }]
       });
       state.fileHandle = handle;
@@ -1179,7 +1375,7 @@ async function saveToFile(context: Context): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = _app.document.createElement('a');
   a.href = url;
-  a.download = 'canvas.json';
+  a.download = 'canvas.8bc';
   a.click();
   URL.revokeObjectURL(url);
   localStorage.setItem(STORAGE_KEYS.AUTOSAVE, data);
@@ -1246,7 +1442,9 @@ function exportToPng(context: Context): void {
     edgeDeleteAnimation: null,
     nodeDeleteAnimation: null,
     nodeCreateAnimation: null,
-    fileHandle: null
+    fileHandle: null,
+    neutralinoFilePath: null,
+    neutralinoWatcherId: null
   };
 
   tempState.nodes.forEach(n => {
@@ -1266,19 +1464,24 @@ function exportToPng(context: Context): void {
 async function loadFromFile(context: Context): Promise<void> {
   const { state } = context;
 
+  // NeutralinoJS環境の場合はネイティブAPIを使用
+  if (isNeutralino()) {
+    await loadFromNeutralino(context);
+    return;
+  }
+
   if ('showOpenFilePicker' in window) {
     try {
       const [handle] = await (window as any).showOpenFilePicker({
         types: [{
           description: 'Canvas File',
-          accept: { 'application/json': ['.json', '.canvas'] }
+          accept: { 'application/json': ['.json', '.8bc'] }
         }]
       });
       state.fileHandle = handle;
       const f = await handle.getFile();
       const data = await f.text();
-      const parsed = JSON.parse(data);
-      loadFromJson(parsed, context);
+      applyLoadedData(data, context, { fileName: f.name });
       return;
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
@@ -1679,6 +1882,31 @@ function initApp(context: Context): void {
   canvas.addEventListener('mouseup', () => handleMouseUp(context));
   canvas.addEventListener('wheel', (e) => handleWheel(e, context));
 
+  canvas.addEventListener('dblclick', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const node = findNodeAt({ x, y }, context);
+
+    if (node && node.type === 'text') {
+      const propText = app.document.getElementById('prop-text') as HTMLTextAreaElement;
+      if (propText) propText.focus();
+    }
+  });
+
+  // ドラッグ&ドロップ
+  canvas.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    canvas.classList.add('drag-over');
+  });
+  canvas.addEventListener('dragleave', () => {
+    canvas.classList.remove('drag-over');
+  });
+  canvas.addEventListener('drop', (e) => {
+    canvas.classList.remove('drag-over');
+    handleDrop(e, context);
+  });
+
   app.document.getElementById('btn-new')!.addEventListener('click', () => createNew(_state));
   app.document.getElementById('btn-add-text')!.addEventListener('click', () => addTextNode(_state, undefined, undefined, _app));
   app.document.getElementById('btn-add-dot')!.addEventListener('click', () => addDotNode(_state, undefined, undefined, _app));
@@ -1717,12 +1945,7 @@ function initApp(context: Context): void {
       const file = target.files[0];
       const reader = new FileReader();
       reader.onload = (ev) => {
-        try {
-          const parsed = JSON.parse(reader.result as string);
-          loadFromJson(parsed, context);
-        } catch (err) {
-          alert('ファイルの形式が正しくありません');
-        }
+        applyLoadedData(reader.result as string, context, { fileName: file.name });
       };
       reader.readAsText(file);
     }
@@ -1829,6 +2052,18 @@ function initApp(context: Context): void {
     localStorage.removeItem(STORAGE_KEYS.DEV_MODE);
     location.reload();
   });
+
+  // NeutralinoJS初期化
+  if (isNeutralino()) {
+    Neutralino.init();
+    Neutralino.events.on('ready', () => {
+      console.log('NeutralinoJS initialized');
+      Neutralino.window.setTitle('TinyTidyCanvas');
+      if (_state.neutralinoFilePath) {
+        startFileWatcher(context);
+      }
+    });
+  }
 }
 
 function startEdgeAnimation(): void {

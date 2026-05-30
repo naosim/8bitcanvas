@@ -1,0 +1,46 @@
+{
+  "applicationId": "com.8bitcanvas.tinytidycanvas",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "url": "/",
+  "documentRoot": "/resources/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "nativeAllowList": [
+    "app.*",
+    "window.*",
+    "os.*",
+    "filesystem.*",
+    "storage.*",
+    "clipboard.*"
+  ],
+  "copyright": "TinyTidyCanvas",
+  "applicationIcon": "resources/icons/icon.png",
+  "modes": {
+    "window": {
+      "title": "TinyTidyCanvas",
+      "width": 1200,
+      "height": 800,
+      "minWidth": 600,
+      "minHeight": 400,
+      "icon": "/resources/icons/icon.png",
+      "enableInspector": true,
+      "exitProcessOnClose": true,
+      "useSavedState": true,
+      "center": true,
+      "injectClientLibrary": true
+    }
+  },
+  "cli": {
+    "binaryName": "tinytidycanvas",
+    "resourcesPath": "/resources/",
+    "resourcesExclude": ".*\\.ts$|.*\\.tsx$|.*node_modules.*",
+    "clientLibrary": "/resources/neutralino.js",
+    "binaryVersion": "6.7.0",
+    "clientVersion": "6.7.0"
+  },
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": false
+  }
+}

@@ -183,3 +183,15 @@ body {
 .transparent-option {
   display: none;
 }
+
+.file-name {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--gray-1);
+  padding: 0 8px;
+}
+
+#canvas.drag-over {
+  outline: 3px dashed var(--accent-4);
+  outline-offset: -3px;
+}

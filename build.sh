@@ -25,4 +25,8 @@ fi
 # Copy bundle to resources for NeutralinoJS
 cp dist/bundle.js resources/
 
+# Sync HTML and CSS between dist and resources
+cp resources/index.html dist/
+cp resources/style.css dist/
+
 echo "Build complete: dist/bundle.js"

@@ -29,4 +29,17 @@ cp dist/bundle.js resources/
 cp resources/index.html dist/
 cp resources/style.css dist/
 
-echo "Build complete: dist/bundle.js"
+echo "Browser build complete: dist/"
+
+# Build desktop package (skip with --skip-desktop flag)
+if [ "$1" != "--skip-desktop" ]; then
+  echo "Building desktop package..."
+  neu build
+  if [ $? -ne 0 ]; then
+    echo "Desktop build failed"
+    exit 1
+  fi
+  echo "Desktop build complete"
+fi
+
+echo "All builds complete"

@@ -33,7 +33,6 @@ export interface PlatformState extends CoreState {
   fileHandle: FileSystemFileHandle | null;
   neutralinoFilePath: string | null;
   neutralinoWatcherId: number | null;
-  _sessionId?: string;
 }
 
 // Helper to cast Context to PlatformState
@@ -118,10 +117,8 @@ export function getAutosaveKey(state: PlatformState): string {
   if (state.fileHandle) {
     return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.fileHandle.name)}`;
   }
-  if (!state._sessionId) {
-    state._sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-  }
-  return `${STORAGE_KEYS.AUTOSAVE}-${state._sessionId}`;
+  // 新規ファイルは固定キーで復元可能に
+  return `${STORAGE_KEYS.AUTOSAVE}-new`;
 }
 
 export interface AutosaveEntry {

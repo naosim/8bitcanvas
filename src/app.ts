@@ -771,7 +771,6 @@ function createNew(state: State): void {
   state.offset = { x: 0, y: 0 };
   state.fileHandle = null;
   state.neutralinoFilePath = null;
-  state._sessionId = undefined;
   // ファイルウォッチング停止（非同期、結果を待たない）
   stopFileWatcher({ state, app: _app }).catch(() => {});
   updateFileName(state);

@@ -293,10 +293,7 @@
     if (state.fileHandle) {
       return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.fileHandle.name)}`;
     }
-    if (!state._sessionId) {
-      state._sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-    }
-    return `${STORAGE_KEYS.AUTOSAVE}-${state._sessionId}`;
+    return `${STORAGE_KEYS.AUTOSAVE}-new`;
   }
   async function getAutosaveIndex() {
     const entries = [];
@@ -998,7 +995,6 @@
     state.offset = { x: 0, y: 0 };
     state.fileHandle = null;
     state.neutralinoFilePath = null;
-    state._sessionId = void 0;
     stopFileWatcher({ state, app: _app }).catch(() => {
     });
     updateFileName(state);

@@ -117,11 +117,10 @@
   var PIXEL_SIZE = 4;
   var NEW_CANVAS_INITIAL_OFFSET = PIXEL_SIZE * 16;
   var HistoryManager = class {
-    constructor(maxSize = 50, onSave) {
+    constructor(maxSize = 50) {
       this.history = [];
       this.historyIndex = -1;
       this.maxSize = maxSize;
-      this.onSave = onSave;
     }
     save(state, extra) {
       this.history = this.history.slice(0, this.historyIndex + 1);
@@ -135,13 +134,6 @@
         this.history.shift();
         this.historyIndex--;
       }
-      const data = JSON.stringify({
-        nodes: state.nodes,
-        edges: state.edges,
-        colorPalettes: state.colorPalettes,
-        ...extra
-      });
-      this.onSave?.(data);
     }
     undo(state) {
       if (this.historyIndex > 0) {
@@ -285,6 +277,70 @@
       localStorage.removeItem(key);
     }
   }
+  var MAX_AUTOSAVE_FILES = 10;
+  function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+  }
+  function getAutosaveKey(state) {
+    if (state.neutralinoFilePath) {
+      return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.neutralinoFilePath)}`;
+    }
+    if (state.fileHandle) {
+      return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.fileHandle.name)}`;
+    }
+    if (!state._sessionId) {
+      state._sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+    }
+    return `${STORAGE_KEYS.AUTOSAVE}-${state._sessionId}`;
+  }
+  async function getAutosaveIndex() {
+    const entries = [];
+    const prefix = `${STORAGE_KEYS.AUTOSAVE}-`;
+    if (isNeutralino()) {
+      return entries;
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix) && key !== STORAGE_KEYS.DEV_MODE) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || "{}");
+          entries.push({
+            key,
+            fileName: data.neutralinoFilePath?.split(/[/\\]/).pop() || data._fileName || "\u65B0\u898F",
+            savedAt: data._savedAt || "",
+            nodeCount: data.nodes?.length || 0
+          });
+        } catch {
+        }
+      }
+    }
+    return entries.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  }
+  async function cleanupOldAutosaves() {
+    const entries = await getAutosaveIndex();
+    if (entries.length <= MAX_AUTOSAVE_FILES) return;
+    const toDelete = entries.slice(MAX_AUTOSAVE_FILES);
+    for (const entry of toDelete) {
+      await storageRemove(entry.key);
+    }
+  }
+  async function saveAutosave(key, data) {
+    const parsed = JSON.parse(data);
+    parsed._savedAt = (/* @__PURE__ */ new Date()).toISOString();
+    await storageSet(key, JSON.stringify(parsed));
+    await cleanupOldAutosaves();
+  }
+  async function removeAllAutosaves() {
+    const entries = await getAutosaveIndex();
+    for (const entry of entries) {
+      await storageRemove(entry.key);
+    }
+  }
   var updateFileNameCallback = null;
   var applyLoadedDataCallback = null;
   async function saveToNeutralino(context2) {
@@ -298,7 +354,7 @@
       if (filePath) {
         await Neutralino.filesystem.writeFile(filePath, data);
         platformState.neutralinoFilePath = filePath;
-        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+        await saveAutosave(getAutosaveKey(platformState), data);
         updateFileNameCallback?.(state);
         await startFileWatcher(context2);
       }
@@ -316,7 +372,7 @@
     const data = exportToObsidianCanvas(state);
     try {
       await Neutralino.filesystem.writeFile(platformState.neutralinoFilePath, data);
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      await saveAutosave(getAutosaveKey(platformState), data);
       await startFileWatcher(context2);
     } catch (err) {
       console.error("NeutralinoJS overwrite error:", err);
@@ -874,6 +930,7 @@
     state.offset = { x: 0, y: 0 };
     state.fileHandle = null;
     state.neutralinoFilePath = null;
+    state._sessionId = void 0;
     stopFileWatcher({ state, app: _app }).catch(() => {
     });
     updateFileName(state);
@@ -1218,7 +1275,7 @@
           const writable2 = await state.fileHandle.createWritable();
           await writable2.write(data);
           await writable2.close();
-          await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+          await saveAutosave(getAutosaveKey(state), data);
           return;
         }
         const handle = await window.showSaveFilePicker({
@@ -1231,7 +1288,7 @@
         const writable = await handle.createWritable();
         await writable.write(data);
         await writable.close();
-        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+        await saveAutosave(getAutosaveKey(state), data);
         return;
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -1244,7 +1301,7 @@
     a.download = "canvas.8bc";
     a.click();
     URL.revokeObjectURL(url);
-    await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+    await saveAutosave(getAutosaveKey(state), data);
   }
   async function saveToOverwrite(context2) {
     const { state } = context2;
@@ -1258,7 +1315,7 @@
         const writable = await state.fileHandle.createWritable();
         await writable.write(data);
         await writable.close();
-        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+        await saveAutosave(getAutosaveKey(state), data);
         return;
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -1388,7 +1445,8 @@
     render();
   }
   async function loadFromLocalStorage(state) {
-    const data = await storageGet(STORAGE_KEYS.AUTOSAVE);
+    const key = getAutosaveKey(state);
+    const data = await storageGet(key);
     if (data) {
       try {
         const parsed = JSON.parse(data);
@@ -1870,6 +1928,15 @@
       render();
       updatePropertiesPanel(_state, _app);
     });
+    let lastSavedData = "";
+    setInterval(() => {
+      const data = exportToObsidianCanvas(_state);
+      if (data !== lastSavedData) {
+        const key = getAutosaveKey(_state);
+        saveAutosave(key, data);
+        lastSavedData = data;
+      }
+    }, 3e4);
     storageGet(STORAGE_KEYS.DEV_MODE).then((devMode) => {
       const isDev = devMode === "true" || new URLSearchParams(window.location.search).get("dev") === "true";
       if (isDev) {
@@ -1877,7 +1944,7 @@
       }
     });
     app.document.getElementById("btn-clear-storage").addEventListener("click", async () => {
-      await storageRemove(STORAGE_KEYS.AUTOSAVE);
+      await removeAllAutosaves();
       await storageRemove(STORAGE_KEYS.DEV_MODE);
       location.reload();
     });

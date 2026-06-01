@@ -60,11 +60,9 @@ export class HistoryManager {
   private history: string[] = [];
   private historyIndex: number = -1;
   private maxSize: number;
-  private onSave?: (data: string) => void;
 
-  constructor(maxSize: number = 50, onSave?: (data: string) => void) {
+  constructor(maxSize: number = 50) {
     this.maxSize = maxSize;
-    this.onSave = onSave;
   }
 
   save(state: CoreState, extra?: Record<string, unknown>): void {
@@ -79,13 +77,6 @@ export class HistoryManager {
       this.history.shift();
       this.historyIndex--;
     }
-    const data = JSON.stringify({
-      nodes: state.nodes,
-      edges: state.edges,
-      colorPalettes: state.colorPalettes,
-      ...extra
-    });
-    this.onSave?.(data);
   }
 
   undo(state: CoreState): boolean {

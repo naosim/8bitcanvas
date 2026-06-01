@@ -33,6 +33,7 @@ export interface PlatformState extends CoreState {
   fileHandle: FileSystemFileHandle | null;
   neutralinoFilePath: string | null;
   neutralinoWatcherId: number | null;
+  _sessionId?: string;
 }
 
 // Helper to cast Context to PlatformState
@@ -97,6 +98,90 @@ export async function storageRemove(key: string): Promise<void> {
   }
 }
 
+// --- Autosave Key Management ---
+
+const MAX_AUTOSAVE_FILES = 10;
+
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+export function getAutosaveKey(state: PlatformState): string {
+  if (state.neutralinoFilePath) {
+    return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.neutralinoFilePath)}`;
+  }
+  if (state.fileHandle) {
+    return `${STORAGE_KEYS.AUTOSAVE}-${hashString(state.fileHandle.name)}`;
+  }
+  if (!state._sessionId) {
+    state._sessionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+  }
+  return `${STORAGE_KEYS.AUTOSAVE}-${state._sessionId}`;
+}
+
+export interface AutosaveEntry {
+  key: string;
+  fileName: string;
+  savedAt: string;
+  nodeCount: number;
+}
+
+export async function getAutosaveIndex(): Promise<AutosaveEntry[]> {
+  const entries: AutosaveEntry[] = [];
+  const prefix = `${STORAGE_KEYS.AUTOSAVE}-`;
+
+  if (isNeutralino()) {
+    // NeutralinoJS: storage APIはキー一覧を取得できないため空配列を返す
+    return entries;
+  }
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(prefix) && key !== STORAGE_KEYS.DEV_MODE) {
+      try {
+        const data = JSON.parse(localStorage.getItem(key) || '{}');
+        entries.push({
+          key,
+          fileName: data.neutralinoFilePath?.split(/[/\\]/).pop() || data._fileName || '新規',
+          savedAt: data._savedAt || '',
+          nodeCount: data.nodes?.length || 0
+        });
+      } catch {}
+    }
+  }
+
+  return entries.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+}
+
+export async function cleanupOldAutosaves(): Promise<void> {
+  const entries = await getAutosaveIndex();
+  if (entries.length <= MAX_AUTOSAVE_FILES) return;
+
+  const toDelete = entries.slice(MAX_AUTOSAVE_FILES);
+  for (const entry of toDelete) {
+    await storageRemove(entry.key);
+  }
+}
+
+export async function saveAutosave(key: string, data: string): Promise<void> {
+  const parsed = JSON.parse(data);
+  parsed._savedAt = new Date().toISOString();
+  await storageSet(key, JSON.stringify(parsed));
+  await cleanupOldAutosaves();
+}
+
+export async function removeAllAutosaves(): Promise<void> {
+  const entries = await getAutosaveIndex();
+  for (const entry of entries) {
+    await storageRemove(entry.key);
+  }
+}
+
 // --- Callbacks (to avoid circular dependencies) ---
 
 let updateFileNameCallback: ((state: CoreState, fileName?: string) => void) | null = null;
@@ -125,7 +210,7 @@ export async function saveToNeutralino(context: Context): Promise<void> {
     if (filePath) {
       await Neutralino.filesystem.writeFile(filePath, data);
       platformState.neutralinoFilePath = filePath;
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      await saveAutosave(getAutosaveKey(platformState), data);
       updateFileNameCallback?.(state);
       await startFileWatcher(context);
     }
@@ -144,7 +229,7 @@ export async function saveToOverwriteNeutralino(context: Context): Promise<void>
   const data = exportToObsidianCanvas(state);
   try {
     await Neutralino.filesystem.writeFile(platformState.neutralinoFilePath, data);
-    await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+    await saveAutosave(getAutosaveKey(platformState), data);
     await startFileWatcher(context);
   } catch (err) {
     console.error('NeutralinoJS overwrite error:', err);

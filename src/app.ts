@@ -40,6 +40,9 @@ import {
   storageSet,
   storageGet,
   storageRemove,
+  getAutosaveKey,
+  saveAutosave,
+  removeAllAutosaves,
   saveToNeutralino,
   saveToOverwriteNeutralino,
   loadFromNeutralino,
@@ -686,6 +689,7 @@ function createNew(state: State): void {
   state.offset = { x: 0, y: 0 };
   state.fileHandle = null;
   state.neutralinoFilePath = null;
+  state._sessionId = undefined;
   // ファイルウォッチング停止（非同期、結果を待たない）
   stopFileWatcher({ state, app: _app }).catch(() => {});
   updateFileName(state);
@@ -1060,7 +1064,7 @@ async function saveToFile(context: Context): Promise<void> {
         const writable = await state.fileHandle.createWritable();
         await writable.write(data);
         await writable.close();
-        await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+        await saveAutosave(getAutosaveKey(state), data);
         return;
       }
       const handle = await (window as any).showSaveFilePicker({
@@ -1073,7 +1077,7 @@ async function saveToFile(context: Context): Promise<void> {
       const writable = await handle.createWritable();
       await writable.write(data);
       await writable.close();
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      await saveAutosave(getAutosaveKey(state), data);
       return;
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
@@ -1087,7 +1091,7 @@ async function saveToFile(context: Context): Promise<void> {
   a.download = 'canvas.8bc';
   a.click();
   URL.revokeObjectURL(url);
-  await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+  await saveAutosave(getAutosaveKey(state), data);
 }
 
 async function saveToOverwrite(context: Context): Promise<void> {
@@ -1104,7 +1108,7 @@ async function saveToOverwrite(context: Context): Promise<void> {
       const writable = await state.fileHandle.createWritable();
       await writable.write(data);
       await writable.close();
-      await storageSet(STORAGE_KEYS.AUTOSAVE, data);
+      await saveAutosave(getAutosaveKey(state), data);
       return;
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
@@ -1253,7 +1257,8 @@ function loadFromJson(data: any, context: Context): void {
 }
 
 async function loadFromLocalStorage(state: State): Promise<void> {
-  const data = await storageGet(STORAGE_KEYS.AUTOSAVE);
+  const key = getAutosaveKey(state);
+  const data = await storageGet(key);
   if (data) {
     try {
       const parsed = JSON.parse(data);
@@ -1779,6 +1784,17 @@ function initApp(context: Context): void {
     updatePropertiesPanel(_state, _app);
   });
 
+  // 30秒ごとの定期保存
+  let lastSavedData = '';
+  setInterval(() => {
+    const data = exportToObsidianCanvas(_state);
+    if (data !== lastSavedData) {
+      const key = getAutosaveKey(_state);
+      saveAutosave(key, data);
+      lastSavedData = data;
+    }
+  }, 30000);
+
   storageGet(STORAGE_KEYS.DEV_MODE).then((devMode) => {
     const isDev = devMode === 'true' || new URLSearchParams(window.location.search).get('dev') === 'true';
     if (isDev) {
@@ -1787,7 +1803,7 @@ function initApp(context: Context): void {
   });
 
   app.document.getElementById('btn-clear-storage')!.addEventListener('click', async () => {
-    await storageRemove(STORAGE_KEYS.AUTOSAVE);
+    await removeAllAutosaves();
     await storageRemove(STORAGE_KEYS.DEV_MODE);
     location.reload();
   });

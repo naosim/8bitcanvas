@@ -728,17 +728,48 @@
     }
     const pixelSize = PIXEL_SIZE * state.zoom;
     const strokeColor = state.selectedEdge?.id === edge.id ? "#ffff00" : "#ffffff";
-    const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
-    const steps = Math.max(1, Math.floor(dist / pixelSize));
-    ctx.fillStyle = strokeColor;
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = snapToPixel(from.x + dx * t, pixelSize);
-      const y = snapToPixel(from.y + dy * t, pixelSize);
-      ctx.fillRect(x, y, pixelSize, pixelSize);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = pixelSize;
+    ctx.lineCap = "square";
+    ctx.lineJoin = "miter";
+    ctx.beginPath();
+    const sx = snapToPixel(from.x, pixelSize);
+    const sy = snapToPixel(from.y, pixelSize);
+    const ex = snapToPixel(to.x, pixelSize);
+    const ey = snapToPixel(to.y, pixelSize);
+    ctx.moveTo(sx, sy);
+    let cx = sx;
+    let cy = sy;
+    const dx = Math.abs(ex - sx);
+    const dy = Math.abs(ey - sy);
+    const stepX = sx < ex ? pixelSize : -pixelSize;
+    const stepY = sy < ey ? pixelSize : -pixelSize;
+    if (dx >= dy) {
+      let error = dx / 2;
+      while (cx !== ex) {
+        cx += stepX;
+        error -= dy;
+        if (error < 0) {
+          ctx.lineTo(cx, cy);
+          cy += stepY;
+          error += dx;
+        }
+        ctx.lineTo(cx, cy);
+      }
+    } else {
+      let error = dy / 2;
+      while (cy !== ey) {
+        cy += stepY;
+        error -= dx;
+        if (error < 0) {
+          ctx.lineTo(cx, cy);
+          cx += stepX;
+          error += dy;
+        }
+        ctx.lineTo(cx, cy);
+      }
     }
+    ctx.stroke();
     function drawPixelArrowHead(from2, to2, pixelSize2) {
       const dx2 = to2.x - from2.x;
       const dy2 = to2.y - from2.y;
@@ -823,18 +854,55 @@
     const to = worldToScreen(toPos, state, canvas);
     if (from.x === to.x && from.y === to.y) return;
     const pixelSize = PIXEL_SIZE * state.zoom;
-    const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
-    const steps = Math.max(1, Math.floor(dist / pixelSize));
-    const currentSteps = Math.floor(steps * progress);
-    ctx.fillStyle = "#ffffff";
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    for (let i = 0; i <= currentSteps; i++) {
-      const t = i / steps;
-      const x = snapToPixel(from.x + dx * t, pixelSize);
-      const y = snapToPixel(from.y + dy * t, pixelSize);
-      ctx.fillRect(x, y, pixelSize, pixelSize);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = pixelSize;
+    ctx.lineCap = "square";
+    ctx.lineJoin = "miter";
+    ctx.beginPath();
+    const sx = snapToPixel(from.x, pixelSize);
+    const sy = snapToPixel(from.y, pixelSize);
+    const ex = snapToPixel(to.x, pixelSize);
+    const ey = snapToPixel(to.y, pixelSize);
+    ctx.moveTo(sx, sy);
+    let cx = sx;
+    let cy = sy;
+    const dx = Math.abs(ex - sx);
+    const dy = Math.abs(ey - sy);
+    const stepX = sx < ex ? pixelSize : -pixelSize;
+    const stepY = sy < ey ? pixelSize : -pixelSize;
+    const totalSteps = dx + dy;
+    const currentSteps = Math.floor(totalSteps * progress);
+    let stepCount = 0;
+    if (dx >= dy) {
+      let error = dx / 2;
+      while (cx !== ex && stepCount < currentSteps) {
+        cx += stepX;
+        error -= dy;
+        if (error < 0) {
+          ctx.lineTo(cx, cy);
+          cy += stepY;
+          error += dx;
+          stepCount++;
+        }
+        ctx.lineTo(cx, cy);
+        stepCount++;
+      }
+    } else {
+      let error = dy / 2;
+      while (cy !== ey && stepCount < currentSteps) {
+        cy += stepY;
+        error -= dx;
+        if (error < 0) {
+          ctx.lineTo(cx, cy);
+          cx += stepX;
+          error += dy;
+          stepCount++;
+        }
+        ctx.lineTo(cx, cy);
+        stepCount++;
+      }
     }
+    ctx.stroke();
   }
   function findNodeAt(point, context2) {
     const { state, app } = context2;

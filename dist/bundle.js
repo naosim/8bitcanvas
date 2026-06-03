@@ -1494,10 +1494,10 @@
         const node = { ...n };
         if (n.width <= 20 && n.height <= 20) {
           node.type = "dot";
-          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.color);
         } else {
           node.type = n.type || "text";
-          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.bg);
+          node.bgPaletteIndex = findPaletteIndex(state.colorPalettes, n.color);
         }
         node.bgTransparent = n.bgTransparent || false;
         node.autoResize = n.autoResize !== void 0 ? n.autoResize : true;
@@ -1520,9 +1520,7 @@
     if (data) {
       try {
         const parsed = JSON.parse(data);
-        if (parsed.nodes) state.nodes = parsed.nodes;
-        if (parsed.edges) state.edges = parsed.edges;
-        if (parsed.colorPalettes) state.colorPalettes = parsed.colorPalettes;
+        loadFromJson2(parsed, context);
         if (parsed.neutralinoFilePath) state.neutralinoFilePath = parsed.neutralinoFilePath;
         state.historyManager.save(state);
       } catch (e) {

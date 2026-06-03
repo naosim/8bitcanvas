@@ -741,9 +741,12 @@
     const dy = Math.abs(ey - sy);
     const stepX = sx < ex ? pixelSize : -pixelSize;
     const stepY = sy < ey ? pixelSize : -pixelSize;
+    const maxSteps = 1e3;
+    let stepCount = 0;
+    const tolerance = pixelSize / 2;
     if (dx >= dy) {
       let error = dx / 2;
-      while (cx !== ex) {
+      while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
         cx += stepX;
         error -= dy;
         if (error < 0) {
@@ -752,10 +755,11 @@
           error += dx;
         }
         ctx.lineTo(cx, cy);
+        stepCount++;
       }
     } else {
       let error = dy / 2;
-      while (cy !== ey) {
+      while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
         cy += stepY;
         error -= dx;
         if (error < 0) {
@@ -764,6 +768,7 @@
           error += dy;
         }
         ctx.lineTo(cx, cy);
+        stepCount++;
       }
     }
     ctx.stroke();
@@ -868,11 +873,12 @@
     const stepX = sx < ex ? pixelSize : -pixelSize;
     const stepY = sy < ey ? pixelSize : -pixelSize;
     const totalSteps = dx + dy;
-    const currentSteps = Math.floor(totalSteps * progress);
+    const maxSteps = Math.min(Math.floor(totalSteps * progress), 1e3);
     let stepCount = 0;
+    const tolerance = pixelSize / 2;
     if (dx >= dy) {
       let error = dx / 2;
-      while (cx !== ex && stepCount < currentSteps) {
+      while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
         cx += stepX;
         error -= dy;
         if (error < 0) {
@@ -886,7 +892,7 @@
       }
     } else {
       let error = dy / 2;
-      while (cy !== ey && stepCount < currentSteps) {
+      while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
         cy += stepY;
         error -= dx;
         if (error < 0) {
@@ -1654,7 +1660,7 @@
     const { state } = context2;
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    state.zoom = Math.max(0.1, Math.min(5, state.zoom * delta));
+    state.zoom = Math.max(0.2, Math.min(5, state.zoom * delta));
     render();
   }
   function handleMouseDown(e, context2) {

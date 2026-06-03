@@ -450,32 +450,35 @@ function drawEdge(edge: Edge, context: Context): void {
   const dy = Math.abs(ey - sy);
   const stepX = sx < ex ? pixelSize : -pixelSize;
   const stepY = sy < ey ? pixelSize : -pixelSize;
+  const maxSteps = 1000;
+  let stepCount = 0;
+  const tolerance = pixelSize / 2;
 
   if (dx >= dy) {
     let error = dx / 2;
-    while (cx !== ex) {
+    while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
       cx += stepX;
       error -= dy;
       if (error < 0) {
-        // 水平→垂直の順で2本の線を描画（斜め防止）
         ctx.lineTo(cx, cy);
         cy += stepY;
         error += dx;
       }
       ctx.lineTo(cx, cy);
+      stepCount++;
     }
   } else {
     let error = dy / 2;
-    while (cy !== ey) {
+    while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
       cy += stepY;
       error -= dx;
       if (error < 0) {
-        // 垂直→水平の順で2本の線を描画（斜め防止）
         ctx.lineTo(cx, cy);
         cx += stepX;
         error += dy;
       }
       ctx.lineTo(cx, cy);
+      stepCount++;
     }
   }
 
@@ -598,12 +601,13 @@ function drawPartialEdge(context: Context, fromNode: CanvasNode, toNode: CanvasN
   const stepY = sy < ey ? pixelSize : -pixelSize;
 
   const totalSteps = dx + dy;
-  const currentSteps = Math.floor(totalSteps * progress);
+  const maxSteps = Math.min(Math.floor(totalSteps * progress), 1000);
   let stepCount = 0;
+  const tolerance = pixelSize / 2;
 
   if (dx >= dy) {
     let error = dx / 2;
-    while (cx !== ex && stepCount < currentSteps) {
+    while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
       cx += stepX;
       error -= dy;
       if (error < 0) {
@@ -617,7 +621,7 @@ function drawPartialEdge(context: Context, fromNode: CanvasNode, toNode: CanvasN
     }
   } else {
     let error = dy / 2;
-    while (cy !== ey && stepCount < currentSteps) {
+    while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
       cy += stepY;
       error -= dx;
       if (error < 0) {
@@ -1491,7 +1495,7 @@ function handleWheel(e: WheelEvent, context: Context): void {
   const { state } = context;
   e.preventDefault();
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  state.zoom = Math.max(0.1, Math.min(5, state.zoom * delta));
+  state.zoom = Math.max(0.2, Math.min(5, state.zoom * delta));
   render();
 }
 

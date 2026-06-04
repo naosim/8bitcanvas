@@ -194,6 +194,7 @@
         width: n.width,
         height: n.height,
         text: n.text,
+        note: n.note,
         textAlign: n.textAlign,
         textValign: n.textValign,
         color: n.type === "dot" ? void 0 : state.colorPalettes[n.bgPaletteIndex],
@@ -1501,6 +1502,7 @@
         }
         node.bgTransparent = n.bgTransparent || false;
         node.autoResize = n.autoResize !== void 0 ? n.autoResize : true;
+        node.note = n.note || "";
         return node;
       });
     }
@@ -1783,6 +1785,7 @@
       const isText = state.selectedNode.type === "text";
       textProps.style.display = isText ? "contents" : "none";
       bgTransparentOpt.style.display = isText ? "inline" : "none";
+      document2.getElementById("btn-note").style.display = isText ? "inline-block" : "none";
       if (isText) {
         document2.getElementById("prop-text").value = state.selectedNode.text || "";
         document2.getElementById("prop-text-halign").value = state.selectedNode.textAlign || "left";
@@ -2015,6 +2018,36 @@
       await removeAllAutosaves();
       await storageRemove(STORAGE_KEYS.DEV_MODE);
       location.reload();
+    });
+    let editingNoteNodeId = null;
+    app.document.getElementById("btn-note").addEventListener("click", () => {
+      if (context2.state.selectedNode && context2.state.selectedNode.type === "text") {
+        editingNoteNodeId = context2.state.selectedNode.id;
+        const noteText = context2.state.selectedNode.note || "";
+        app.document.getElementById("note-textarea").value = noteText;
+        app.document.getElementById("note-dialog").style.display = "flex";
+      }
+    });
+    app.document.getElementById("btn-note-close").addEventListener("click", () => {
+      app.document.getElementById("note-dialog").style.display = "none";
+      editingNoteNodeId = null;
+    });
+    app.document.getElementById("btn-note-save").addEventListener("click", () => {
+      if (editingNoteNodeId) {
+        const node = context2.state.nodes.find((n) => n.id === editingNoteNodeId);
+        if (node) {
+          node.note = app.document.getElementById("note-textarea").value;
+          context2.state.historyManager.save(context2.state);
+        }
+      }
+      app.document.getElementById("note-dialog").style.display = "none";
+      editingNoteNodeId = null;
+    });
+    app.document.getElementById("note-dialog").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) {
+        app.document.getElementById("note-dialog").style.display = "none";
+        editingNoteNodeId = null;
+      }
     });
     initNeutralino(context2);
   }

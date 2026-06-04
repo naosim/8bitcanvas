@@ -5,6 +5,7 @@ import { Point, Figure } from './util';
 export interface CanvasNode extends Figure {
   id: string;
   text?: string;
+  note?: string;
   textAlign?: 'left' | 'center' | 'right';
   textValign?: 'top' | 'middle' | 'bottom';
   bgPaletteIndex: number;
@@ -191,6 +192,7 @@ export function exportToObsidianCanvas(state: CoreState): string {
       width: n.width,
       height: n.height,
       text: n.text,
+      note: n.note,
       textAlign: n.textAlign,
       textValign: n.textValign,
       color: n.type === 'dot' ? undefined : state.colorPalettes[n.bgPaletteIndex],

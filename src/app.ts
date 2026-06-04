@@ -1327,6 +1327,7 @@ function loadFromJson(data: any, context: Context): void {
       }
       node.bgTransparent = n.bgTransparent || false;
       node.autoResize = n.autoResize !== undefined ? n.autoResize : true;
+      node.note = n.note || '';
       return node;
     });
   }
@@ -1632,6 +1633,7 @@ function updatePropertiesPanel(state: State, app: App): void {
     const isText = state.selectedNode.type === 'text';
     textProps.style.display = isText ? 'contents' : 'none';
     bgTransparentOpt.style.display = isText ? 'inline' : 'none';
+    (document.getElementById('btn-note') as HTMLElement).style.display = isText ? 'inline-block' : 'none';
 
     if (isText) {
       (document.getElementById('prop-text') as HTMLInputElement).value = state.selectedNode.text || '';
@@ -1889,6 +1891,42 @@ function initApp(context: Context): void {
     await removeAllAutosaves();
     await storageRemove(STORAGE_KEYS.DEV_MODE);
     location.reload();
+  });
+
+  // ノートダイアログ制御
+  let editingNoteNodeId: string | null = null;
+
+  app.document.getElementById('btn-note')!.addEventListener('click', () => {
+    if (context.state.selectedNode && context.state.selectedNode.type === 'text') {
+      editingNoteNodeId = context.state.selectedNode.id;
+      const noteText = context.state.selectedNode.note || '';
+      (app.document.getElementById('note-textarea') as HTMLTextAreaElement).value = noteText;
+      (app.document.getElementById('note-dialog') as HTMLElement).style.display = 'flex';
+    }
+  });
+
+  app.document.getElementById('btn-note-close')!.addEventListener('click', () => {
+    (app.document.getElementById('note-dialog') as HTMLElement).style.display = 'none';
+    editingNoteNodeId = null;
+  });
+
+  app.document.getElementById('btn-note-save')!.addEventListener('click', () => {
+    if (editingNoteNodeId) {
+      const node = context.state.nodes.find(n => n.id === editingNoteNodeId);
+      if (node) {
+        node.note = (app.document.getElementById('note-textarea') as HTMLTextAreaElement).value;
+        context.state.historyManager.save(context.state);
+      }
+    }
+    (app.document.getElementById('note-dialog') as HTMLElement).style.display = 'none';
+    editingNoteNodeId = null;
+  });
+
+  app.document.getElementById('note-dialog')!.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      (app.document.getElementById('note-dialog') as HTMLElement).style.display = 'none';
+      editingNoteNodeId = null;
+    }
   });
 
   // NeutralinoJS初期化

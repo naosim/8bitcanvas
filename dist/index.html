@@ -76,6 +76,7 @@
           </div>
           <button id="btn-front" class="pixel-btn">前面</button>
           <button id="btn-back" class="pixel-btn">背面</button>
+          <button id="btn-note" class="pixel-btn" style="display: none;">📝 詳細</button>
         </div>
         <div id="edge-props" class="prop-panel" style="display: none;">
           <div class="prop-row">
@@ -99,6 +100,21 @@
     </div>
     <input type="file" id="file-input" accept=".json,.8bc" style="display: none;">
   </div>
+
+  <!-- ノート編集ダイアログ -->
+  <div id="note-dialog" class="dialog-overlay" style="display: none;">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <span class="dialog-title">ノート</span>
+        <button id="btn-note-close" class="pixel-btn">✕</button>
+      </div>
+      <textarea id="note-textarea" class="note-textarea" placeholder="ノートを入力..."></textarea>
+      <div class="dialog-footer">
+        <button id="btn-note-save" class="pixel-btn">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script src="./bundle.js"></script>
 </body>
 </html>

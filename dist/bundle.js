@@ -735,7 +735,7 @@
     const sy = snapToPixel(from.y, pixelSize);
     const ex = snapToPixel(to.x, pixelSize);
     const ey = snapToPixel(to.y, pixelSize);
-    ctx.moveTo(sx, sy);
+    ctx.fillStyle = strokeColor;
     let cx = sx;
     let cy = sy;
     const dx = Math.abs(ex - sx);
@@ -744,35 +744,40 @@
     const stepY = sy < ey ? pixelSize : -pixelSize;
     const maxSteps = 1e3;
     let stepCount = 0;
-    const tolerance = pixelSize / 2;
+    if (dx === 0 && dy === 0) return;
     if (dx >= dy) {
       let error = dx / 2;
-      while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
+      while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {
         cx += stepX;
         error -= dy;
         if (error < 0) {
-          ctx.lineTo(cx, cy);
           cy += stepY;
           error += dx;
         }
-        ctx.lineTo(cx, cy);
+        if (stepX > 0) cx = Math.min(cx, ex);
+        else cx = Math.max(cx, ex);
+        if (stepY > 0) cy = Math.min(cy, ey);
+        else cy = Math.max(cy, ey);
+        ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(pixelSize), Math.round(pixelSize));
         stepCount++;
       }
     } else {
       let error = dy / 2;
-      while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
+      while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {
         cy += stepY;
         error -= dx;
         if (error < 0) {
-          ctx.lineTo(cx, cy);
           cx += stepX;
           error += dy;
         }
-        ctx.lineTo(cx, cy);
+        if (stepX > 0) cx = Math.min(cx, ex);
+        else cx = Math.max(cx, ex);
+        if (stepY > 0) cy = Math.min(cy, ey);
+        else cy = Math.max(cy, ey);
+        ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(pixelSize), Math.round(pixelSize));
         stepCount++;
       }
     }
-    ctx.stroke();
     function drawPixelArrowHead(from2, to2, pixelSize2) {
       const dx2 = to2.x - from2.x;
       const dy2 = to2.y - from2.y;
@@ -857,16 +862,11 @@
     const to = worldToScreen(toPos, state, canvas);
     if (from.x === to.x && from.y === to.y) return;
     const pixelSize = PIXEL_SIZE * state.zoom;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = pixelSize;
-    ctx.lineCap = "square";
-    ctx.lineJoin = "miter";
-    ctx.beginPath();
     const sx = snapToPixel(from.x, pixelSize);
     const sy = snapToPixel(from.y, pixelSize);
     const ex = snapToPixel(to.x, pixelSize);
     const ey = snapToPixel(to.y, pixelSize);
-    ctx.moveTo(sx, sy);
+    ctx.fillStyle = "#ffffff";
     let cx = sx;
     let cy = sy;
     const dx = Math.abs(ex - sx);
@@ -876,37 +876,40 @@
     const totalSteps = dx + dy;
     const maxSteps = Math.min(Math.floor(totalSteps * progress), 1e3);
     let stepCount = 0;
-    const tolerance = pixelSize / 2;
+    if (dx === 0 && dy === 0) return;
     if (dx >= dy) {
       let error = dx / 2;
-      while (Math.abs(cx - ex) > tolerance && stepCount < maxSteps) {
+      while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {
         cx += stepX;
         error -= dy;
         if (error < 0) {
-          ctx.lineTo(cx, cy);
           cy += stepY;
           error += dx;
-          stepCount++;
         }
-        ctx.lineTo(cx, cy);
+        if (stepX > 0) cx = Math.min(cx, ex);
+        else cx = Math.max(cx, ex);
+        if (stepY > 0) cy = Math.min(cy, ey);
+        else cy = Math.max(cy, ey);
+        ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(pixelSize), Math.round(pixelSize));
         stepCount++;
       }
     } else {
       let error = dy / 2;
-      while (Math.abs(cy - ey) > tolerance && stepCount < maxSteps) {
+      while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {
         cy += stepY;
         error -= dx;
         if (error < 0) {
-          ctx.lineTo(cx, cy);
           cx += stepX;
           error += dy;
-          stepCount++;
         }
-        ctx.lineTo(cx, cy);
+        if (stepX > 0) cx = Math.min(cx, ex);
+        else cx = Math.max(cx, ex);
+        if (stepY > 0) cy = Math.min(cy, ey);
+        else cy = Math.max(cy, ey);
+        ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(pixelSize), Math.round(pixelSize));
         stepCount++;
       }
     }
-    ctx.stroke();
   }
   function findNodeAt(point, context2) {
     const { state, app } = context2;

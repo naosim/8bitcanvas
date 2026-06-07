@@ -733,8 +733,15 @@
     ctx.beginPath();
     const sx = snapToPixel(from.x, pixelSize);
     const sy = snapToPixel(from.y, pixelSize);
-    const ex = snapToPixel(to.x, pixelSize);
-    const ey = snapToPixel(to.y, pixelSize);
+    let ex = snapToPixel(to.x, pixelSize);
+    let ey = snapToPixel(to.y, pixelSize);
+    const lineDirX = ex - sx;
+    const lineDirY = ey - sy;
+    if (Math.abs(lineDirX) >= Math.abs(lineDirY) && lineDirX !== 0) {
+      ex -= Math.sign(lineDirX) * pixelSize;
+    } else if (lineDirY !== 0) {
+      ey -= Math.sign(lineDirY) * pixelSize;
+    }
     ctx.fillStyle = strokeColor;
     let cx = sx;
     let cy = sy;
@@ -745,6 +752,7 @@
     const maxSteps = 1e3;
     let stepCount = 0;
     if (dx === 0 && dy === 0) return;
+    ctx.fillRect(Math.round(sx), Math.round(sy), Math.round(pixelSize), Math.round(pixelSize));
     if (dx >= dy) {
       let error = dx / 2;
       while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {
@@ -782,24 +790,29 @@
       const dx2 = to2.x - from2.x;
       const dy2 = to2.y - from2.y;
       const angle = Math.atan2(dy2, dx2);
-      const arrowOffset = pixelSize2 * 5;
-      const arrowTip = { x: to2.x - arrowOffset * Math.cos(angle), y: to2.y - arrowOffset * Math.sin(angle) };
-      const pattern = [[1], [1, 2], [1, 2, 3], [1, 2], [1]];
-      pattern.forEach((col, i) => {
-        col.forEach((j) => {
-          const px = j * pixelSize2;
-          const py = (i - 2) * pixelSize2;
-          const rx = px * Math.cos(angle) - py * Math.sin(angle) + arrowTip.x;
-          const ry = px * Math.sin(angle) + py * Math.cos(angle) + arrowTip.y;
-          ctx.fillRect(rx, ry, pixelSize2, pixelSize2);
-        });
-      });
+      const arrowPatterns = {
+        0: [[0, 0], [-1, -1], [-1, 1], [-2, -2], [-2, 0], [-2, 2]],
+        1: [[0, 0], [-1, 0], [-2, 0], [-3, 0], [0, -1], [-1, -1], [0, -2], [0, -3]],
+        2: [[0, 0], [-1, -1], [1, -1], [-2, -2], [0, -2], [2, -2]],
+        3: [[0, 0], [1, 0], [2, 0], [3, 0], [0, -1], [1, -1], [0, -2], [0, -3]],
+        4: [[0, 0], [1, -1], [1, 1], [2, -2], [2, 0], [2, 2]],
+        5: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [0, 2], [0, 3]],
+        6: [[0, 0], [-1, 1], [1, 1], [-2, 2], [0, 2], [2, 2]],
+        7: [[0, 0], [-3, 0], [-2, 0], [-1, 0], [-1, 1], [0, 1], [0, 2], [0, 3]]
+      };
+      const snappedAngle = Math.round(angle / (Math.PI / 4));
+      const normalizedAngle = (snappedAngle % 8 + 8) % 8;
+      const pattern = arrowPatterns[normalizedAngle] || arrowPatterns[0];
+      ctx.fillStyle = strokeColor;
+      for (const [ax, ay] of pattern) {
+        ctx.fillRect(to2.x + ax * pixelSize2, to2.y + ay * pixelSize2, Math.round(pixelSize2), Math.round(pixelSize2));
+      }
     }
     if (edge.arrowStart) {
-      drawPixelArrowHead(to, from, pixelSize);
+      drawPixelArrowHead({ x: ex, y: ey }, { x: sx, y: sy }, pixelSize);
     }
     if (edge.arrowEnd) {
-      drawPixelArrowHead(from, to, pixelSize);
+      drawPixelArrowHead({ x: sx, y: sy }, { x: ex, y: ey }, pixelSize);
     }
   }
   function renderFull(context2) {
@@ -864,8 +877,15 @@
     const pixelSize = PIXEL_SIZE * state.zoom;
     const sx = snapToPixel(from.x, pixelSize);
     const sy = snapToPixel(from.y, pixelSize);
-    const ex = snapToPixel(to.x, pixelSize);
-    const ey = snapToPixel(to.y, pixelSize);
+    let ex = snapToPixel(to.x, pixelSize);
+    let ey = snapToPixel(to.y, pixelSize);
+    const lineDirX = ex - sx;
+    const lineDirY = ey - sy;
+    if (Math.abs(lineDirX) >= Math.abs(lineDirY) && lineDirX !== 0) {
+      ex -= Math.sign(lineDirX) * pixelSize;
+    } else if (lineDirY !== 0) {
+      ey -= Math.sign(lineDirY) * pixelSize;
+    }
     ctx.fillStyle = "#ffffff";
     let cx = sx;
     let cy = sy;
@@ -877,6 +897,7 @@
     const maxSteps = Math.min(Math.floor(totalSteps * progress), 1e3);
     let stepCount = 0;
     if (dx === 0 && dy === 0) return;
+    ctx.fillRect(Math.round(sx), Math.round(sy), Math.round(pixelSize), Math.round(pixelSize));
     if (dx >= dy) {
       let error = dx / 2;
       while ((Math.abs(cx - ex) > 0 || Math.abs(cy - ey) > 0) && stepCount < maxSteps) {

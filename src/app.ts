@@ -439,8 +439,17 @@ function drawEdge(edge: Edge, context: Context): void {
   // fillRectで全ドットを描画（Bresenhamアルゴリズム）
   const sx = snapToPixel(from.x, pixelSize);
   const sy = snapToPixel(from.y, pixelSize);
-  const ex = snapToPixel(to.x, pixelSize);
-  const ey = snapToPixel(to.y, pixelSize);
+  let ex = snapToPixel(to.x, pixelSize);
+  let ey = snapToPixel(to.y, pixelSize);
+
+  // 終点を1ピクセル分線の方向へオフセット（fillRectが矩形にめり込むのを防止）
+  const lineDirX = ex - sx;
+  const lineDirY = ey - sy;
+  if (Math.abs(lineDirX) >= Math.abs(lineDirY) && lineDirX !== 0) {
+    ex -= Math.sign(lineDirX) * pixelSize;
+  } else if (lineDirY !== 0) {
+    ey -= Math.sign(lineDirY) * pixelSize;
+  }
 
   ctx.fillStyle = strokeColor;
 
@@ -454,6 +463,8 @@ function drawEdge(edge: Edge, context: Context): void {
   let stepCount = 0;
 
   if (dx === 0 && dy === 0) return;
+
+  ctx.fillRect(Math.round(sx), Math.round(sy), Math.round(pixelSize), Math.round(pixelSize));
 
   if (dx >= dy) {
     // 水平優先
@@ -491,26 +502,35 @@ function drawEdge(edge: Edge, context: Context): void {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = Math.atan2(dy, dx);
-    const arrowOffset = pixelSize * 5;
-    const arrowTip = { x: to.x - arrowOffset * Math.cos(angle), y: to.y - arrowOffset * Math.sin(angle) };
 
-    const pattern = [[1], [1, 2], [1, 2, 3], [1, 2], [1]];
-    pattern.forEach((col, i) => {
-      col.forEach((j) => {
-        const px = j * pixelSize;
-        const py = (i - 2) * pixelSize;
-        const rx = px * Math.cos(angle) - py * Math.sin(angle) + arrowTip.x;
-        const ry = px * Math.sin(angle) + py * Math.cos(angle) + arrowTip.y;
-        ctx.fillRect(rx, ry, pixelSize, pixelSize);
-      });
-    });
+    // 8方向の矢印パターン（先端を基点とした相対座標 [軸方向, 垂直方向]）
+    const arrowPatterns: Record<number, number[][]> = {
+      0:    [[0,0],[-1,-1],[-1,1],[-2,-2],[-2,0],[-2,2]],
+      1:    [[0,0],[-1,0],[-2,0],[-3,0],[0,-1],[-1,-1],[0,-2],[0,-3]],
+      2:    [[0,0],[-1,-1],[1,-1],[-2,-2],[0,-2],[2,-2]],
+      3:    [[0,0],[1,0],[2,0],[3,0],[0,-1],[1,-1],[0,-2],[0,-3]],
+      4:    [[0,0],[1,-1],[1,1],[2,-2],[2,0],[2,2]],
+      5:    [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[0,2],[0,3]],
+      6:    [[0,0],[-1,1],[1,1],[-2,2],[0,2],[2,2]],
+      7:    [[0,0],[-3,0],[-2,0],[-1,0],[-1,1],[0,1],[0,2],[0,3]],
+    };
+
+    // 角度を45度刻みに丸めてパターン番号を取得
+    const snappedAngle = Math.round(angle / (Math.PI / 4));
+    const normalizedAngle = ((snappedAngle % 8) + 8) % 8;
+    const pattern = arrowPatterns[normalizedAngle] || arrowPatterns[0];
+
+    ctx.fillStyle = strokeColor;
+    for (const [ax, ay] of pattern) {
+      ctx.fillRect(to.x + ax * pixelSize, to.y + ay * pixelSize, Math.round(pixelSize), Math.round(pixelSize));
+    }
   }
 
   if (edge.arrowStart) {
-    drawPixelArrowHead(to, from, pixelSize);
+    drawPixelArrowHead({ x: ex, y: ey }, { x: sx, y: sy }, pixelSize);
   }
   if (edge.arrowEnd) {
-    drawPixelArrowHead(from, to, pixelSize);
+    drawPixelArrowHead({ x: sx, y: sy }, { x: ex, y: ey }, pixelSize);
   }
 }
 
@@ -585,8 +605,17 @@ function drawPartialEdge(context: Context, fromNode: CanvasNode, toNode: CanvasN
 
   const sx = snapToPixel(from.x, pixelSize);
   const sy = snapToPixel(from.y, pixelSize);
-  const ex = snapToPixel(to.x, pixelSize);
-  const ey = snapToPixel(to.y, pixelSize);
+  let ex = snapToPixel(to.x, pixelSize);
+  let ey = snapToPixel(to.y, pixelSize);
+
+  // 終点を1ピクセル分線の方向へオフセット（fillRectが矩形にめり込むのを防止）
+  const lineDirX = ex - sx;
+  const lineDirY = ey - sy;
+  if (Math.abs(lineDirX) >= Math.abs(lineDirY) && lineDirX !== 0) {
+    ex -= Math.sign(lineDirX) * pixelSize;
+  } else if (lineDirY !== 0) {
+    ey -= Math.sign(lineDirY) * pixelSize;
+  }
 
   ctx.fillStyle = '#ffffff';
 
@@ -602,6 +631,8 @@ function drawPartialEdge(context: Context, fromNode: CanvasNode, toNode: CanvasN
   let stepCount = 0;
 
   if (dx === 0 && dy === 0) return;
+
+  ctx.fillRect(Math.round(sx), Math.round(sy), Math.round(pixelSize), Math.round(pixelSize));
 
   if (dx >= dy) {
     let error = dx / 2;
@@ -651,9 +682,16 @@ function drawEdgeAnimation(context: Context): void {
   const fromScreen = worldToScreen(fromPos, state, canvas);
   const toScreen = worldToScreen(toPos, state, canvas);
   const pixelSize = PIXEL_SIZE * state.zoom;
-  const dx = toScreen.x - fromScreen.x;
-  const dy = toScreen.y - fromScreen.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const rawDx = toScreen.x - fromScreen.x;
+  const rawDy = toScreen.y - fromScreen.y;
+  const dist = Math.sqrt(rawDx * rawDx + rawDy * rawDy);
+  // 終点を1ピクセル分線の方向へオフセット（fillRectが矩形にめり込むのを防止）
+  let dx = rawDx;
+  let dy = rawDy;
+  if (dist > pixelSize) {
+    dx -= (rawDx / dist) * pixelSize;
+    dy -= (rawDy / dist) * pixelSize;
+  }
   const steps = Math.max(1, Math.floor(dist / pixelSize));
   const currentSteps = Math.floor(steps * progress);
   for (let i = 0; i <= currentSteps; i++) {

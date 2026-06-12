@@ -12,6 +12,7 @@ export interface CanvasNode extends Figure {
   bgTransparent: boolean;
   strokeTransparent: boolean;
   autoResize: boolean;
+  url?: string;
 }
 
 export interface Edge {
@@ -197,7 +198,8 @@ export function exportToObsidianCanvas(state: CoreState): string {
       textValign: n.textValign,
       color: n.type === 'dot' ? undefined : state.colorPalettes[n.bgPaletteIndex],
       bgTransparent: n.bgTransparent,
-      strokeTransparent: n.strokeTransparent
+      strokeTransparent: n.strokeTransparent,
+      url: n.url
     })),
     edges: state.edges.map(e => ({
       id: e.id,

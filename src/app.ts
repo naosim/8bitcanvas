@@ -388,6 +388,26 @@ function drawTextNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number
     });
     ctx.textAlign = 'left';
   }
+
+  if (node.url && zoom > 0.3) {
+    const buttonSize = 4 * pixelSize;
+    const margin = 2 * zoom;
+    let btnX = x + margin;
+    let btnY = y + h - buttonSize - margin;
+    btnX = snapToPixel(btnX, pixelSize);
+    btnY = snapToPixel(btnY, pixelSize);
+
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(btnX, btnY, buttonSize, buttonSize);
+    ctx.fillStyle = '#ffffff';
+    drawPixelRect(ctx, btnX, btnY, buttonSize, buttonSize, pixelSize, pixelSize);
+
+    const iconSize = buttonSize * 0.6;
+    ctx.font = `${iconSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔗', btnX + buttonSize / 2, btnY + buttonSize / 2);
+  }
 }
 
 function drawDotNode(ctx: CanvasRenderingContext2D, node: CanvasNode, x: number, y: number, w: number, h: number, pixelSize: number, isSelected: boolean, zoom: number, colorPalettes: string[]): void {
@@ -1541,6 +1561,25 @@ function handleMouseDown(e: MouseEvent, context: Context): void {
   const node = findNodeAt({ x, y }, context);
 
   if (node) {
+    if (node.url) {
+      const pixelSize = PIXEL_SIZE * state.zoom;
+      const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
+      let w = node.width * state.zoom;
+      let h = node.height * state.zoom;
+      w = snapToPixel(w, pixelSize) || pixelSize;
+      h = snapToPixel(h, pixelSize) || pixelSize;
+      const snappedX = snapToPixel(pos.x, pixelSize);
+      const snappedY = snapToPixel(pos.y, pixelSize);
+      const buttonSize = 4 * pixelSize;
+      const margin = 2 * state.zoom;
+      const btnX = snapToPixel(snappedX + margin, pixelSize);
+      const btnY = snapToPixel(snappedY + h - buttonSize - margin, pixelSize);
+      if (x >= btnX && x <= btnX + buttonSize && y >= btnY && y <= btnY + buttonSize) {
+        window.open(node.url, '_blank');
+        return;
+      }
+    }
+
     const world = screenToWorld({ x, y }, context.state, canvas);
     const resizeHandleSize = 10;
     const inResizeZone =
@@ -1677,14 +1716,23 @@ function updatePropertiesPanel(state: State, app: App): void {
     }
     (document.getElementById('prop-bg-transparent') as HTMLInputElement).checked = state.selectedNode.bgTransparent || false;
     (document.getElementById('prop-stroke-transparent') as HTMLInputElement).checked = state.selectedNode.strokeTransparent || false;
+
+    const urlProps = document.getElementById('url-props');
+    if (urlProps) urlProps.style.display = 'flex';
+    const propUrl = document.getElementById('prop-url') as HTMLInputElement | null;
+    if (propUrl) propUrl.value = state.selectedNode.url || '';
   } else if (state.selectedEdge) {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'flex';
     (document.getElementById('prop-arrow-start') as HTMLInputElement).checked = state.selectedEdge.arrowStart || false;
     (document.getElementById('prop-arrow-end') as HTMLInputElement).checked = state.selectedEdge.arrowEnd || false;
+    const urlProps = document.getElementById('url-props');
+    if (urlProps) urlProps.style.display = 'none';
   } else {
     nodeProps.style.display = 'none';
     edgeProps.style.display = 'none';
+    const urlProps = document.getElementById('url-props');
+    if (urlProps) urlProps.style.display = 'none';
   }
 }
 
@@ -1883,6 +1931,26 @@ function initApp(context: Context): void {
       context.state.historyManager.save(context.state);
     }
   });
+
+  const urlInput = app.document.getElementById('prop-url');
+  if (urlInput) {
+    urlInput.addEventListener('input', (e) => {
+      if (context.state.selectedNode) {
+        context.state.selectedNode.url = (e.target as HTMLInputElement).value || undefined;
+        render();
+        context.state.historyManager.save(context.state);
+      }
+    });
+  }
+
+  const openUrlBtn = app.document.getElementById('btn-open-url');
+  if (openUrlBtn) {
+    openUrlBtn.addEventListener('click', () => {
+      if (context.state.selectedNode?.url) {
+        window.open(context.state.selectedNode.url, '_blank');
+      }
+    });
+  }
 
   app.document.getElementById('palette-color-picker')!.addEventListener('input', (e) => {
     if (context.state.editingPaletteIndex !== undefined) {

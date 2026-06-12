@@ -199,7 +199,8 @@
         textValign: n.textValign,
         color: n.type === "dot" ? void 0 : state.colorPalettes[n.bgPaletteIndex],
         bgTransparent: n.bgTransparent,
-        strokeTransparent: n.strokeTransparent
+        strokeTransparent: n.strokeTransparent,
+        url: n.url
       })),
       edges: state.edges.map((e) => ({
         id: e.id,
@@ -693,6 +694,23 @@
         }
       });
       ctx.textAlign = "left";
+    }
+    if (node.url && zoom > 0.3) {
+      const buttonSize = 4 * pixelSize;
+      const margin = 2 * zoom;
+      let btnX = x + margin;
+      let btnY = y + h - buttonSize - margin;
+      btnX = snapToPixel(btnX, pixelSize);
+      btnY = snapToPixel(btnY, pixelSize);
+      ctx.fillStyle = "#333333";
+      ctx.fillRect(btnX, btnY, buttonSize, buttonSize);
+      ctx.fillStyle = "#ffffff";
+      drawPixelRect(ctx, btnX, btnY, buttonSize, buttonSize, pixelSize, pixelSize);
+      const iconSize = buttonSize * 0.6;
+      ctx.font = `${iconSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("\u{1F517}", btnX + buttonSize / 2, btnY + buttonSize / 2);
     }
   }
   function drawDotNode(ctx, node, x, y, w, h, pixelSize, isSelected, zoom, colorPalettes) {
@@ -1695,6 +1713,24 @@
     const y = e.clientY - rect.top;
     const node = findNodeAt({ x, y }, context2);
     if (node) {
+      if (node.url) {
+        const pixelSize = PIXEL_SIZE * state.zoom;
+        const pos = worldToScreen({ x: node.x, y: node.y }, state, canvas);
+        let w = node.width * state.zoom;
+        let h = node.height * state.zoom;
+        w = snapToPixel(w, pixelSize) || pixelSize;
+        h = snapToPixel(h, pixelSize) || pixelSize;
+        const snappedX = snapToPixel(pos.x, pixelSize);
+        const snappedY = snapToPixel(pos.y, pixelSize);
+        const buttonSize = 4 * pixelSize;
+        const margin = 2 * state.zoom;
+        const btnX = snapToPixel(snappedX + margin, pixelSize);
+        const btnY = snapToPixel(snappedY + h - buttonSize - margin, pixelSize);
+        if (x >= btnX && x <= btnX + buttonSize && y >= btnY && y <= btnY + buttonSize) {
+          window.open(node.url, "_blank");
+          return;
+        }
+      }
       const world = screenToWorld({ x, y }, context2.state, canvas);
       const resizeHandleSize = 10;
       const inResizeZone = world.x >= node.x + node.width - resizeHandleSize && world.y >= node.y + node.height - resizeHandleSize;
@@ -1818,14 +1854,22 @@
       }
       document2.getElementById("prop-bg-transparent").checked = state.selectedNode.bgTransparent || false;
       document2.getElementById("prop-stroke-transparent").checked = state.selectedNode.strokeTransparent || false;
+      const urlProps = document2.getElementById("url-props");
+      if (urlProps) urlProps.style.display = "flex";
+      const propUrl = document2.getElementById("prop-url");
+      if (propUrl) propUrl.value = state.selectedNode.url || "";
     } else if (state.selectedEdge) {
       nodeProps.style.display = "none";
       edgeProps.style.display = "flex";
       document2.getElementById("prop-arrow-start").checked = state.selectedEdge.arrowStart || false;
       document2.getElementById("prop-arrow-end").checked = state.selectedEdge.arrowEnd || false;
+      const urlProps = document2.getElementById("url-props");
+      if (urlProps) urlProps.style.display = "none";
     } else {
       nodeProps.style.display = "none";
       edgeProps.style.display = "none";
+      const urlProps = document2.getElementById("url-props");
+      if (urlProps) urlProps.style.display = "none";
     }
   }
   function updatePaletteDisplay(containerId, context2) {
@@ -2006,6 +2050,24 @@
         context2.state.historyManager.save(context2.state);
       }
     });
+    const urlInput = app.document.getElementById("prop-url");
+    if (urlInput) {
+      urlInput.addEventListener("input", (e) => {
+        if (context2.state.selectedNode) {
+          context2.state.selectedNode.url = e.target.value || void 0;
+          render();
+          context2.state.historyManager.save(context2.state);
+        }
+      });
+    }
+    const openUrlBtn = app.document.getElementById("btn-open-url");
+    if (openUrlBtn) {
+      openUrlBtn.addEventListener("click", () => {
+        if (context2.state.selectedNode?.url) {
+          window.open(context2.state.selectedNode.url, "_blank");
+        }
+      });
+    }
     app.document.getElementById("palette-color-picker").addEventListener("input", (e) => {
       if (context2.state.editingPaletteIndex !== void 0) {
         context2.state.colorPalettes[context2.state.editingPaletteIndex] = hexToRgba(e.target.value);
